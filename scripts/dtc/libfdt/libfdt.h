@@ -95,8 +95,9 @@ extern "C" {
 
 /* Error codes: codes for bad device tree blobs */
 #define FDT_ERR_TRUNCATED	8
-	/* FDT_ERR_TRUNCATED: Structure block of the given device tree
-	 * ends without an FDT_END tag. */
+	/* FDT_ERR_TRUNCATED: FDT or a sub-block is improperly
+	 * terminated (overflows, goes outside allowed bounds, or
+	 * isn't properly terminated).  */
 #define FDT_ERR_BADMAGIC	9
 	/* FDT_ERR_BADMAGIC: Given "device tree" appears not to be a
 	 * device tree at all - it is missing the flattened device
@@ -171,63 +172,26 @@ static inline void *fdt_offset_ptr_w(void *fdt, int offset, int checklen)
 uint32_t fdt_next_tag(const void *fdt, int offset, int *nextoffset);
 
 /*
- * External helpers to access words from a device tree blob. They're built
- * to work even with unaligned pointers on platforms (such as ARMv5) that don't
- * like unaligned loads and stores.
+ * Alignment helpers:
+ *     These helpers access words from a device tree blob.  They're
+ *     built to work even with unaligned pointers on platforms (ike
+ *     ARM) that don't like unaligned loads and stores
  */
-static inline uint16_t fdt16_ld(const fdt16_t *p)
-{
-	const uint8_t *bp = (const uint8_t *)p;
-
-	return ((uint16_t)bp[0] << 8) | bp[1];
-}
 
 static inline uint32_t fdt32_ld(const fdt32_t *p)
 {
-	const uint8_t *bp = (const uint8_t *)p;
+	fdt32_t v;
 
-	return ((uint32_t)bp[0] << 24)
-		| ((uint32_t)bp[1] << 16)
-		| ((uint32_t)bp[2] << 8)
-		| bp[3];
-}
-
-static inline void fdt32_st(void *property, uint32_t value)
-{
-	uint8_t *bp = (uint8_t *)property;
-
-	bp[0] = value >> 24;
-	bp[1] = (value >> 16) & 0xff;
-	bp[2] = (value >> 8) & 0xff;
-	bp[3] = value & 0xff;
+	memcpy(&v, p, sizeof(v));
+	return fdt32_to_cpu(v);
 }
 
 static inline uint64_t fdt64_ld(const fdt64_t *p)
 {
-	const uint8_t *bp = (const uint8_t *)p;
+	fdt64_t v;
 
-	return ((uint64_t)bp[0] << 56)
-		| ((uint64_t)bp[1] << 48)
-		| ((uint64_t)bp[2] << 40)
-		| ((uint64_t)bp[3] << 32)
-		| ((uint64_t)bp[4] << 24)
-		| ((uint64_t)bp[5] << 16)
-		| ((uint64_t)bp[6] << 8)
-		| bp[7];
-}
-
-static inline void fdt64_st(void *property, uint64_t value)
-{
-	uint8_t *bp = (uint8_t *)property;
-
-	bp[0] = value >> 56;
-	bp[1] = (value >> 48) & 0xff;
-	bp[2] = (value >> 40) & 0xff;
-	bp[3] = (value >> 32) & 0xff;
-	bp[4] = (value >> 24) & 0xff;
-	bp[5] = (value >> 16) & 0xff;
-	bp[6] = (value >> 8) & 0xff;
-	bp[7] = value & 0xff;
+	memcpy(&v, p, sizeof(v));
+	return fdt64_to_cpu(v);
 }
 
 /**********************************************************************/
@@ -289,7 +253,7 @@ int fdt_next_subnode(const void *fdt, int offset);
 /* General functions                                                  */
 /**********************************************************************/
 #define fdt_get_header(fdt, field) \
-	(fdt32_to_cpu(((const struct fdt_header *)(fdt))->field))
+	(fdt32_ld(&((const struct fdt_header *)(fdt))->field))
 #define fdt_magic(fdt)			(fdt_get_header(fdt, magic))
 #define fdt_totalsize(fdt)		(fdt_get_header(fdt, totalsize))
 #define fdt_off_dt_struct(fdt)		(fdt_get_header(fdt, off_dt_struct))
@@ -322,32 +286,29 @@ fdt_set_hdr_(size_dt_struct);
 /**
  * fdt_header_size - return the size of the tree's header
  * @fdt: pointer to a flattened device tree
- *
- * Return: size of DTB header in bytes
- */
-size_t fdt_header_size(const void *fdt);
-
-/**
- * fdt_header_size_ - internal function to get header size from a version number
- * @version: devicetree version number
- *
- * Return: size of DTB header in bytes
  */
 size_t fdt_header_size_(uint32_t version);
+static inline size_t fdt_header_size(const void *fdt)
+{
+	return fdt_header_size_(fdt_version(fdt));
+}
 
 /**
  * fdt_check_header - sanity check a device tree header
+
  * @fdt: pointer to data which might be a flattened device tree
  *
  * fdt_check_header() checks that the given buffer contains what
- * appears to be a flattened device tree with sane information in its
- * header.
+ * appears to be a flattened device tree, and that the header contains
+ * valid information (to the extent that can be determined from the
+ * header alone).
  *
  * returns:
  *     0, if the buffer appears to contain a valid device tree
  *     -FDT_ERR_BADMAGIC,
  *     -FDT_ERR_BADVERSION,
- *     -FDT_ERR_BADSTATE, standard meanings, as above
+ *     -FDT_ERR_BADSTATE,
+ *     -FDT_ERR_TRUNCATED, standard meanings, as above
  */
 int fdt_check_header(const void *fdt);
 
@@ -376,6 +337,24 @@ int fdt_move(const void *fdt, void *buf, int bufsize);
 /* Read-only functions                                                */
 /**********************************************************************/
 
+int fdt_check_full(const void *fdt, size_t bufsize);
+
+/**
+ * fdt_get_string - retrieve a string from the strings block of a device tree
+ * @fdt: pointer to the device tree blob
+ * @stroffset: offset of the string within the strings block (native endian)
+ * @lenp: optional pointer to return the string's length
+ *
+ * fdt_get_string() retrieves a pointer to a single string from the
+ * strings block of the device tree blob at fdt, and optionally also
+ * returns the string's length in *lenp.
+ *
+ * returns:
+ *     a pointer to the string, on success
+ *     NULL, if stroffset is out of bounds, or doesn't point to a valid string
+ */
+const char *fdt_get_string(const void *fdt, int stroffset, int *lenp);
+
 /**
  * fdt_string - retrieve a string from the strings block of a device tree
  * @fdt: pointer to the device tree blob
@@ -386,7 +365,7 @@ int fdt_move(const void *fdt, void *buf, int bufsize);
  *
  * returns:
  *     a pointer to the string, on success
- *     NULL, if stroffset is out of bounds
+ *     NULL, if stroffset is out of bounds, or doesn't point to a valid string
  */
 const char *fdt_string(const void *fdt, int stroffset);
 
@@ -1220,7 +1199,7 @@ int fdt_address_cells(const void *fdt, int nodeoffset);
  *
  * returns:
  *	0 <= n < FDT_MAX_NCELLS, on success
- *      2, if the node has no #address-cells property
+ *      2, if the node has no #size-cells property
  *      -FDT_ERR_BADNCELLS, if the node has a badly formatted or invalid
  *		#size-cells property
  *	-FDT_ERR_BADMAGIC,
@@ -1487,10 +1466,13 @@ static inline int fdt_property_u64(void *fdt, const char *name, uint64_t val)
 	fdt64_t tmp = cpu_to_fdt64(val);
 	return fdt_property(fdt, name, &tmp, sizeof(tmp));
 }
+
+#ifndef SWIG /* Not available in Python */
 static inline int fdt_property_cell(void *fdt, const char *name, uint32_t val)
 {
 	return fdt_property_u32(fdt, name, val);
 }
+#endif
 
 /**
  * fdt_property_placeholder - add a new property and return a ptr to its value

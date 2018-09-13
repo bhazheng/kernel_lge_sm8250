@@ -67,10 +67,8 @@ static int fdt_blocks_misordered_(const void *fdt,
 		    (fdt_off_dt_strings(fdt) + fdt_size_dt_strings(fdt)));
 }
 
-static int fdt_rw_check_header_(void *fdt)
+static int fdt_rw_probe_(void *fdt)
 {
-	if (can_assume(VALID_DTB))
-		return 0;
 	FDT_RO_PROBE(fdt);
 
 	if (!can_assume(LATEST) && fdt_version(fdt) < 17)
@@ -84,10 +82,10 @@ static int fdt_rw_check_header_(void *fdt)
 	return 0;
 }
 
-#define FDT_RW_CHECK_HEADER(fdt) \
+#define FDT_RW_PROBE(fdt) \
 	{ \
 		int err_; \
-		if ((err_ = fdt_rw_check_header_(fdt)) != 0) \
+		if ((err_ = fdt_rw_probe_(fdt)) != 0) \
 			return err_; \
 	}
 
@@ -194,7 +192,7 @@ int fdt_add_mem_rsv(void *fdt, uint64_t address, uint64_t size)
 	struct fdt_reserve_entry *re;
 	int err;
 
-	FDT_RW_CHECK_HEADER(fdt);
+	FDT_RW_PROBE(fdt);
 
 	re = fdt_mem_rsv_w_(fdt, fdt_num_mem_rsv(fdt));
 	err = fdt_splice_mem_rsv_(fdt, re, 0, 1);
@@ -210,7 +208,7 @@ int fdt_del_mem_rsv(void *fdt, int n)
 {
 	struct fdt_reserve_entry *re = fdt_mem_rsv_w_(fdt, n);
 
-	FDT_RW_CHECK_HEADER(fdt);
+	FDT_RW_PROBE(fdt);
 
 	if (n >= fdt_num_mem_rsv(fdt))
 		return -FDT_ERR_NOTFOUND;
@@ -273,7 +271,7 @@ int fdt_set_name(void *fdt, int nodeoffset, const char *name)
 	int oldlen, newlen;
 	int err;
 
-	FDT_RW_CHECK_HEADER(fdt);
+	FDT_RW_PROBE(fdt);
 
 	namep = (char *)(uintptr_t)fdt_get_name(fdt, nodeoffset, &oldlen);
 	if (!namep)
@@ -296,7 +294,7 @@ int fdt_setprop_placeholder(void *fdt, int nodeoffset, const char *name,
 	struct fdt_property *prop;
 	int err;
 
-	FDT_RW_CHECK_HEADER(fdt);
+	FDT_RW_PROBE(fdt);
 
 	err = fdt_resize_property_(fdt, nodeoffset, name, len, &prop);
 	if (err == -FDT_ERR_NOTFOUND)
@@ -329,7 +327,7 @@ int fdt_appendprop(void *fdt, int nodeoffset, const char *name,
 	struct fdt_property *prop;
 	int err, oldlen, newlen;
 
-	FDT_RW_CHECK_HEADER(fdt);
+	FDT_RW_PROBE(fdt);
 
 	prop = fdt_get_property_w(fdt, nodeoffset, name, &oldlen);
 	if (prop) {
@@ -355,7 +353,7 @@ int fdt_delprop(void *fdt, int nodeoffset, const char *name)
 	struct fdt_property *prop;
 	int len, proplen;
 
-	FDT_RW_CHECK_HEADER(fdt);
+	FDT_RW_PROBE(fdt);
 
 	prop = fdt_get_property_w(fdt, nodeoffset, name, &len);
 	if (!prop)
@@ -375,7 +373,7 @@ int fdt_add_subnode_namelen(void *fdt, int parentoffset,
 	uint32_t tag;
 	fdt32_t *endtag;
 
-	FDT_RW_CHECK_HEADER(fdt);
+	FDT_RW_PROBE(fdt);
 
 	offset = fdt_subnode_offset_namelen(fdt, parentoffset, name, namelen);
 	if (offset >= 0)
@@ -418,7 +416,7 @@ int fdt_del_node(void *fdt, int nodeoffset)
 {
 	int endoffset;
 
-	FDT_RW_CHECK_HEADER(fdt);
+	FDT_RW_PROBE(fdt);
 
 	endoffset = fdt_node_end_offset_(fdt, nodeoffset);
 	if (endoffset < 0)
@@ -460,7 +458,7 @@ int fdt_open_into(const void *fdt, void *buf, int bufsize)
 	const char *fdtend = fdtstart + fdt_totalsize(fdt);
 	char *tmp;
 
-	FDT_CHECK_HEADER(fdt);
+	FDT_RO_PROBE(fdt);
 
 	mem_rsv_size = (fdt_num_mem_rsv(fdt)+1)
 		* sizeof(struct fdt_reserve_entry);
@@ -523,7 +521,7 @@ int fdt_pack(void *fdt)
 {
 	int mem_rsv_size;
 
-	FDT_RW_CHECK_HEADER(fdt);
+	FDT_RW_PROBE(fdt);
 
 	mem_rsv_size = (fdt_num_mem_rsv(fdt)+1)
 		* sizeof(struct fdt_reserve_entry);

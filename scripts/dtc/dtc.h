@@ -120,10 +120,17 @@ static inline bool strends(const char *str, const char *suffix)
 
 /* Data blobs */
 enum markertype {
+	TYPE_NONE,
 	REF_PHANDLE,
 	REF_PATH,
 	LABEL,
+	TYPE_UINT8,
+	TYPE_UINT16,
+	TYPE_UINT32,
+	TYPE_UINT64,
+	TYPE_STRING,
 };
+extern const char *markername(enum markertype markertype);
 
 static inline bool is_type_marker(enum markertype type)
 {
@@ -154,22 +161,7 @@ struct data {
 	for_each_marker(m) \
 		if ((m)->type == (t))
 
-static inline struct marker *next_type_marker(struct marker *m)
-{
-	for_each_marker(m)
-		if (is_type_marker(m->type))
-			break;
-	return m;
-}
-
-static inline size_t type_marker_length(struct marker *m)
-{
-	struct marker *next = next_type_marker(m->next);
-
-	if (next)
-		return next->offset - m->offset;
-	return 0;
-}
+size_t type_marker_length(struct marker *m);
 
 void data_free(struct data d);
 
@@ -361,6 +353,10 @@ struct dt_info *dt_from_blob(const char *fname);
 
 void dt_to_source(FILE *f, struct dt_info *dti);
 struct dt_info *dt_from_source(const char *f);
+
+/* YAML source */
+
+void dt_to_yaml(FILE *f, struct dt_info *dti);
 
 /* FS trees */
 
