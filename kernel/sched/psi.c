@@ -1051,7 +1051,7 @@ int psi_show(struct seq_file *m, struct psi_group *group, enum psi_res res)
 		seq_printf(m, "\n=== psi trigger setting ===\n");
 
 		list_for_each_entry(trigger, &group->triggers, node)
-			seq_printf(m, "%s: %s threshold:%lluns window:%lluns\n", trigger->comm, trigger->state==PSI_MEM_SOME?"some":"full", trigger->threshold, trigger->win.size);
+			seq_printf(m, "%s: %s threshold:%lluns window:%lluns\n", trigger->state==PSI_MEM_SOME?"some":"full", trigger->threshold, trigger->win.size);
 	}
 #endif /* CONFIG_LGE_SCHED_SHOW_PSI_MEM_TRIGGER_LOG */
 
@@ -1249,8 +1249,6 @@ __poll_t psi_trigger_poll(void **trigger_ptr,
 
 	if (cmpxchg(&t->event, 1, 0) == 1)
 		ret |= EPOLLPRI;
-
-	kref_put(&t->refcount, psi_trigger_destroy);
 
 	return ret;
 }
