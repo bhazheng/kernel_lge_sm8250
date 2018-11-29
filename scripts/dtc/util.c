@@ -83,31 +83,16 @@ int xasprintf_append(char **strp, const char *fmt, ...)
 
 int xasprintf(char **strp, const char *fmt, ...)
 {
-	int n, size = 128;	/* start with 128 bytes */
-	char *p;
+	int n;
 	va_list ap;
 
-	/* initial pointer is NULL making the fist realloc to be malloc */
-	p = NULL;
-	while (1) {
-		p = xrealloc(p, size);
+	*strp = NULL;
 
-		/* Try to print in the allocated space. */
-		va_start(ap, fmt);
-		n = vsnprintf(p, size, fmt, ap);
-		va_end(ap);
+	va_start(ap, fmt);
+	n = xavsprintf_append(strp, fmt, ap);
+	va_end(ap);
 
-		/* If that worked, return the string. */
-		if (n > -1 && n < size)
-			break;
-		/* Else try again with more space. */
-		if (n > -1)	/* glibc 2.1 */
-			size = n + 1; /* precisely what is needed */
-		else		/* glibc 2.0 */
-			size *= 2; /* twice the old size */
-	}
-	*strp = p;
-	return strlen(p);
+	return n;
 }
 
 char *join_path(const char *path, const char *name)
