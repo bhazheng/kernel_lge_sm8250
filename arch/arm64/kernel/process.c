@@ -84,6 +84,22 @@ void (*pm_power_off_timeout)(void);
 void (*arm_pm_restart_timeout)(enum reboot_mode reboot_mode, const char *cmd);
 #endif
 
+static void __cpu_do_idle(void)
+{
+	dsb(sy);
+	wfi();
+}
+
+/*
+ *	cpu_do_idle()
+ *
+ *	Idle the processor (wait for interrupt).
+ */
+void cpu_do_idle(void)
+{
+	__cpu_do_idle();
+}
+
 /*
  * This is our default idle handler.
  */
