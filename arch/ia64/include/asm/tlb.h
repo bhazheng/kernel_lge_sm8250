@@ -278,41 +278,6 @@ tlb_flush_pmd_range(struct mmu_gather *tlb, unsigned long address,
 		tlb->end_addr = address + size;
 }
 
-#define tlb_migrate_finish(mm)	platform_tlb_migrate_finish(mm)
-
-#define tlb_start_vma(tlb, vma)			do { } while (0)
-#define tlb_end_vma(tlb, vma)			do { } while (0)
-
-#define tlb_remove_tlb_entry(tlb, ptep, addr)		\
-do {							\
-	tlb->need_flush = 1;				\
-	__tlb_remove_tlb_entry(tlb, ptep, addr);	\
-} while (0)
-
-#define tlb_remove_huge_tlb_entry(h, tlb, ptep, address)	\
-	tlb_remove_tlb_entry(tlb, ptep, address)
-
-static inline void tlb_change_page_size(struct mmu_gather *tlb,
-						     unsigned int page_size)
-{
-}
-
-#define pte_free_tlb(tlb, ptep, address)		\
-do {							\
-	tlb->need_flush = 1;				\
-	__pte_free_tlb(tlb, ptep, address);		\
-} while (0)
-
-#define pmd_free_tlb(tlb, ptep, address)		\
-do {							\
-	tlb->need_flush = 1;				\
-	__pmd_free_tlb(tlb, ptep, address);		\
-} while (0)
-
-#define pud_free_tlb(tlb, pudp, address)		\
-do {							\
-	tlb->need_flush = 1;				\
-	__pud_free_tlb(tlb, pudp, address);		\
-} while (0)
+#include <asm-generic/tlb.h>
 
 #endif /* _ASM_IA64_TLB_H */
