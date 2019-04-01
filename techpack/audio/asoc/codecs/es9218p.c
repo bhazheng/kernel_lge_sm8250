@@ -47,10 +47,6 @@
 
 #define     ES9218P_SYSFS 0              // use this feature only for user debug, not release
 
-#ifdef ES9218P_SYSFS
-static struct kobject *es9218_kernelobj;
-#endif
-
 //#define     USE_HPAHiQ                  // THD increased by ~2dB and Power Consumption increasded by ~2mA
 //#define   ES9218P_DEBUG               // ESS pop-click debugging, define to enable step by step override sequence debug messages and time delays.  Use to pinpoint pop-click.
 #define     WORKAROUND_FOR_CORNER_SAMPLES     // set ResetB high two times and send a cmd of soft reset
@@ -1343,70 +1339,24 @@ static int es9218p_sabre_amp_stop(struct i2c_client *client, int headset)
 }
 
 #ifdef ES9218P_SYSFS
-
-/* Left balance volume */
-static ssize_t set_forced_left_volume(struct device *dev,
-                   struct device_attribute *attr,
-                   const char *buf, size_t count) {
-    int input_val; // value representing dB decrease for left channel
-    sscanf(buf, "%d", &input_val);
-
-	/* NOTE: This value is halved internally, so there's no need to use float */
-	g_left_volume = input_val;
-
-    es9218_write_reg(g_es9218_priv->i2c_client, ES9218P_REG_15, g_left_volume);
-
-    return count;
-}
-static ssize_t get_forced_left_volume(struct device *dev,
-                   struct device_attribute *attr,
-                   char *buf) {
-    return sprintf(buf, "%i\n", g_left_volume);
-}
-static DEVICE_ATTR(left_volume, S_IWUSR|S_IRUGO, get_forced_left_volume, set_forced_left_volume);
-
-/* Right balance volume */
-static ssize_t set_forced_right_volume(struct device *dev,
-                   struct device_attribute *attr,
-                   const char *buf, size_t count) {
-    int input_val; // value representing dB decrease for left channel
-    sscanf(buf, "%d", &input_val);
-
-	/* NOTE: This value is halved internally, so there's no need to use float */
-	g_right_volume = input_val;
-
-    es9218_write_reg(g_es9218_priv->i2c_client, ES9218P_REG_16, g_right_volume);
-
-    return count;
-}
-static ssize_t get_forced_right_volume(struct device *dev,
-                   struct device_attribute *attr,
-                   char *buf) {
-    return sprintf(buf, "%i\n", g_right_volume);
-}
-static DEVICE_ATTR(right_volume, S_IWUSR|S_IRUGO, get_forced_right_volume, set_forced_right_volume);
-
-static int forced_headset_type = -1;
-
 static ssize_t set_forced_headset_type(struct device *dev,
                    struct device_attribute *attr,
                    const char *buf, size_t count)
 {
-    int input_val; //0, 1, 2
-    sscanf(buf, "%d", &input_val);
-    
+
     es9218p_sabre_hifi2lpb();
     g_volume = 0;
-    
-    g_headset_type = input_val + 1;
-    forced_headset_type = input_val + 1;
+
+    if (!strncmp(buf, "normal", strlen("normal"))) {
+        g_headset_type = 1;
+    } else if (!strncmp(buf, "hifi", strlen("hifi"))) {
+        g_headset_type = 2;
+    } else if (!strncmp(buf, "aux", strlen("aux"))) {
+        g_headset_type = 3;
+    }
 
     es9218p_sabre_bypass2hifi();
 
-    // When calling set to advanced or aux mode, reset avc volume register to 0
-    if(input_val >= 1) {
-        es9218_set_avc_volume(g_es9218_priv->i2c_client, 0);
-    }
     return count;
 }
 static ssize_t get_forced_headset_type(struct device *dev,
@@ -1417,8 +1367,6 @@ static ssize_t get_forced_headset_type(struct device *dev,
 }
 static DEVICE_ATTR(headset_type, S_IWUSR|S_IRUGO, get_forced_headset_type, set_forced_headset_type);
 
-static int forced_avc_volume = -1;
-
 static ssize_t set_forced_avc_volume(struct device *dev,
                    struct device_attribute *attr,
                    const char *buf, size_t count)
@@ -1426,18 +1374,12 @@ static ssize_t set_forced_avc_volume(struct device *dev,
     int input_vol;
     sscanf(buf, "%d", &input_vol);
 
-    if ( es9218_power_state < ESS_PS_HIFI ) {
-        pr_err("%s() : invalid state = %s\n", __func__, power_state[es9218_power_state]);
-        return -EINVAL;
-    }
-
     if (input_vol >= sizeof(avc_vol_tbl)/sizeof(avc_vol_tbl[0])) {
         pr_err("%s() : Invalid vol = %d return \n", __func__, input_vol);
-        return -EINVAL;
+        return 0;
     }
 
     g_avc_volume = input_vol;
-    forced_avc_volume = input_vol;
 
     es9218_set_avc_volume(g_es9218_priv->i2c_client, g_avc_volume);
 
@@ -1450,178 +1392,16 @@ static ssize_t get_forced_avc_volume(struct device *dev,
 {
     return sprintf(buf, "%i\n", g_avc_volume);
 }
-static __maybe_unused DEVICE_ATTR(avc_volume, S_IWUSR|S_IRUGO, get_forced_avc_volume, set_forced_avc_volume);
-
-static ssize_t set_forced_ess_filter(struct device *dev,
-                   struct device_attribute *attr,
-                   const char *buf, size_t count)
-{
-    int input_filter;
-    sscanf(buf, "%d", &input_filter);
-
-    if ( es9218_power_state < ESS_PS_HIFI ) {
-        pr_err("%s() : invalid state = %s\n", __func__, power_state[es9218_power_state]);
-        return -EINVAL;
-    }
-
-    if (input_filter > 11) {
-        pr_err("%s() : Invalid filter = %d return \n", __func__, input_filter);
-        return -EINVAL;
-    }
-
-    g_sabre_cf_num = input_filter;
-
-    es9218_sabre_cfg_custom_filter(&es9218_sabre_custom_ft[g_sabre_cf_num]);
-
-    // Logic taken from `mute_work_function` above
-    if(g_sabre_cf_num == SHORT_FILTER)
-        g_volume = 0;
-    else if(g_sabre_cf_num == SHARP_FILTER)
-        g_volume = 4;
-    else
-        g_volume = 2;
-
-    es9218_master_trim(g_es9218_priv->i2c_client, g_volume);
-
-    return count;
-}
-
-static ssize_t get_forced_ess_filter(struct device *dev,
-                   struct device_attribute *attr,
-                   char *buf)
-{
-    return sprintf(buf, "%i\n", g_sabre_cf_num);
-}
-static DEVICE_ATTR(ess_filter, S_IWUSR|S_IRUGO, get_forced_ess_filter, set_forced_ess_filter);
-
-/* Custom ESS Filter (filter [3] has to be selected) */
-#define MAX_FILTER_DATA_SIZE     16 /* shape, symmetry, followed by 14 stage 2 coefficients */
-/* 
- * Let's try not to waste much space with string size here: 
- * size = 2 (char space used by shape and symmetry) +
- * 10 * 14 (all usable stage 2 coefficients, each can use a max of 8 chars) +
- * MAX_FILTER_DATA_SIZE (amount of commas needed) +
- * 1 ('\0' char)
- */
-#define MAX_FILTER_STRING_SIZE   2 + (8 * 14) + MAX_FILTER_DATA_SIZE + 1
-static ssize_t set_forced_ess_custom_filter(struct device *dev,
-                   struct device_attribute *attr,
-                   const char *buf, size_t count) {
-	char *datatoken, *delimiter = ",";
-	char *received_data = kzalloc(MAX_FILTER_STRING_SIZE * sizeof(char), GFP_KERNEL);
-	int filter_data[MAX_FILTER_DATA_SIZE], i = 0;
-
-
-	sscanf(buf, "%s", received_data);
-
-	if ( es9218_power_state < ESS_PS_HIFI ) {
-		pr_err("%s() : invalid state = %s\n", __func__, power_state[es9218_power_state]);
-		kfree(received_data);
-		return -EINVAL;
-	}
-
-	/* Tokenize received data and save into the filter data array (everything is an integer) */
-	while ((datatoken = strsep(&received_data, delimiter)) != NULL && i < MAX_FILTER_DATA_SIZE) {
-		if (kstrtoint(datatoken, 10, &filter_data[i]) != 0) {
-			pr_err("Failed to convert filter data!");
-		        kfree(received_data);
-			return -EINVAL;
-		}
-		i++;
-	}
-
-	/* Load the received data into the custom filter */
-	if(filter_data[0] >= 0 && filter_data[0] !=  5 && filter_data[0] <= 7) /* Load filter shape config */
-		es9218_sabre_custom_ft[3].shape    = filter_data[0];
-	if(filter_data[1] == 0 || filter_data[1] == 1) /* Copy filter symmetry config */
-		es9218_sabre_custom_ft[3].symmetry = filter_data[1];
-	for(i = 0; i < 14; i++) {
-			/* 
-			 * Load stage 2 coefficients, totaling 14 data points. The last two datapoints are 
-			 * always zero according to ES9218/P's Official Datasheet.
-			 */
-		if(filter_data[i+2] <= 9999999 && filter_data[i+2] >= -9999999)
-			es9218_sabre_custom_ft[3].stage2_coeff[i] = filter_data[i+2];
-	}
-		/* 
-		 * Stage 1 coefficients aren't needed... stage 2 seems to override them or at least
-		 * significantly impact the results from stage 1, and i really doubt it's
-		 * even possible to translate 128 data points into a UI that's both accurate and
-		 * user-friendly. That's why stage 1 isn't read from, nor written to.
-		 *
-		 * This also reduces ESS's sysfs memory usage by quite a bit, and makes sysfs calls
-		 * that read or write to the custom filter a bit faster as well.
-		 */
-
-	/* Apply the filter (just to update the data internally in case custom filter is not selected) */
-	es9218_sabre_cfg_custom_filter(&es9218_sabre_custom_ft[g_sabre_cf_num]);
-
-	/* We already used up the received data, so free all previously allocated space. */
-	kfree(received_data);
-
-	return count;
-}
-static ssize_t get_forced_ess_custom_filter(struct device *dev,
-                   struct device_attribute *attr,
-                   char *buf) {
-	char send_data[MAX_FILTER_STRING_SIZE];
-	char tempbuf[10]; /* There will never be an element on the filter data that takes more than 9 chars */
-	int i,j, written = 0;
-
-	memset(send_data, 0, sizeof(send_data));
-
-		/* 
-		 * NOTE: Here we don't need to have the "correct" filter selected on the panel,
-		 * we're just reading data from the custom filter which is always 'es9218_sabre_custom_ft[3]'
-		 */
-
-	for (i = 0; i < MAX_FILTER_DATA_SIZE; i++){
-		/* Copy filter shape config */
-		memset(tempbuf, 0, sizeof(tempbuf));
-		if(i == 0)
-			sprintf(tempbuf, "%d", (int) es9218_sabre_custom_ft[3].shape);
-		/* Copy filter symmetry config */
-		else if (i == 1)
-			sprintf(tempbuf, "%d", (int) es9218_sabre_custom_ft[3].symmetry);
-		/* Copy stage 2 coefficients */
-		else if (i >= 2 && i < 16)
-			sprintf(tempbuf, "%d", es9218_sabre_custom_ft[3].stage2_coeff[i-2]);
-		/* Copy stage 1 coefficients (NOT USED) */
-		//else if (i >= 16 && i < 144)
-		//	sprintf(tempbuf, "%d", es9218_sabre_custom_ft[3].stage1_coeff[i-16]);
-
-		for(j = 0; j < 10; j++)
-		{
-			if(tempbuf[j] == '\0') 
-				break;
-
-			send_data[written] = tempbuf[j];
-			written++;
-		}
-
-		/* Add a comma after each element, except for the last element on the filter's data struct */
-		if (i < MAX_FILTER_DATA_SIZE - 1) {
-			send_data[written] = ',';
-			written++;
-		}
-	}
-
-	return sprintf(buf, "%s\n", send_data);
-}
-static DEVICE_ATTR(ess_custom_filter, S_IWUSR|S_IRUGO, get_forced_ess_custom_filter, set_forced_ess_custom_filter);
+static DEVICE_ATTR(avc_volume, S_IWUSR|S_IRUGO, get_forced_avc_volume, set_forced_avc_volume);
 
 static struct attribute *es9218_attrs[] = {
 #ifdef CONFIG_SND_SOC_LGE_ESS_DIGITAL_FILTER
 	&dev_attr_fade_mute_count.attr,
 	&dev_attr_fade_mute_term.attr,
-    &dev_attr_ess_filter.attr,
 #endif
     &dev_attr_registers.attr,
     &dev_attr_headset_type.attr,
-    // &dev_attr_avc_volume.attr,
-    &dev_attr_left_volume.attr,
-	&dev_attr_right_volume.attr,
-    &dev_attr_ess_custom_filter.attr,
+    &dev_attr_avc_volume.attr,
     NULL
 };
 
