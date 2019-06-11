@@ -1256,6 +1256,14 @@ config SCHED_TUNE
 	  influence task placement and CPU frequency selection (if
 	  utilization-driven frequency selection is in use).
 
+config CPUSETS_ASSIST
+	bool "Cpusets configuration helper"
+	depends on CPUSETS
+	depends on ANDROID
+	help
+	  This option enables the configuration of default cpusets
+	  parameters from kernel.
+
 	  If unsure, say N.
 
 config SYSFS_DEPRECATED
