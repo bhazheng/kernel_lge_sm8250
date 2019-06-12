@@ -147,11 +147,7 @@ extern "C" {
 	/* FDT_ERR_BADFLAGS: The function was passed a flags field that
 	 * contains invalid flags or an invalid combination of flags. */
 
-#define FDT_ERR_ALIGNMENT	19
-	/* FDT_ERR_ALIGNMENT: The device tree base address is not 8-byte
-	 * aligned. */
-
-#define FDT_ERR_MAX		19
+#define FDT_ERR_MAX		18
 
 /* constants */
 #define FDT_MAX_PHANDLE 0xfffffffe
@@ -188,6 +184,16 @@ static inline uint32_t fdt32_ld(const fdt32_t *p)
 		| bp[3];
 }
 
+static inline void fdt32_st(void *property, uint32_t value)
+{
+	uint8_t *bp = property;
+
+	bp[0] = value >> 24;
+	bp[1] = (value >> 16) & 0xff;
+	bp[2] = (value >> 8) & 0xff;
+	bp[3] = value & 0xff;
+}
+
 static inline uint64_t fdt64_ld(const fdt64_t *p)
 {
 	const uint8_t *bp = (const uint8_t *)p;
@@ -200,6 +206,20 @@ static inline uint64_t fdt64_ld(const fdt64_t *p)
 		| ((uint64_t)bp[5] << 16)
 		| ((uint64_t)bp[6] << 8)
 		| bp[7];
+}
+
+static inline void fdt64_st(void *property, uint64_t value)
+{
+	uint8_t *bp = property;
+
+	bp[0] = value >> 56;
+	bp[1] = (value >> 48) & 0xff;
+	bp[2] = (value >> 40) & 0xff;
+	bp[3] = (value >> 32) & 0xff;
+	bp[4] = (value >> 24) & 0xff;
+	bp[5] = (value >> 16) & 0xff;
+	bp[6] = (value >> 8) & 0xff;
+	bp[7] = value & 0xff;
 }
 
 /**********************************************************************/
@@ -244,7 +264,7 @@ int fdt_next_subnode(const void *fdt, int offset);
  *		...
  *	}
  *
- *	if ((node < 0) && (node != -FDT_ERR_NOT_FOUND)) {
+ *	if ((node < 0) && (node != -FDT_ERR_NOTFOUND)) {
  *		Error handling
  *	}
  *
@@ -378,12 +398,28 @@ const char *fdt_get_string(const void *fdt, int stroffset, int *lenp);
 const char *fdt_string(const void *fdt, int stroffset);
 
 /**
+ * fdt_find_max_phandle - find and return the highest phandle in a tree
+ * @fdt: pointer to the device tree blob
+ * @phandle: return location for the highest phandle value found in the tree
+ *
+ * fdt_find_max_phandle() finds the highest phandle value in the given device
+ * tree. The value returned in @phandle is only valid if the function returns
+ * success.
+ *
+ * returns:
+ *     0 on success or a negative error code on failure
+ */
+int fdt_find_max_phandle(const void *fdt, uint32_t *phandle);
+
+/**
  * fdt_get_max_phandle - retrieves the highest phandle in a tree
  * @fdt: pointer to the device tree blob
  *
  * fdt_get_max_phandle retrieves the highest phandle in the given
  * device tree. This will ignore badly formatted phandles, or phandles
  * with a value of 0 or -1.
+ *
+ * This function is deprecated in favour of fdt_find_max_phandle().
  *
  * returns:
  *      the highest phandle on success
@@ -412,7 +448,8 @@ static inline uint32_t fdt_get_max_phandle(const void *fdt)
  * highest phandle value in the device tree blob) will be returned in the
  * @phandle parameter.
  *
- * Return: 0 on success or a negative error-code on failure
+ * Returns:
+ *   0 on success or a negative error-code on failure
  */
 int fdt_generate_phandle(const void *fdt, uint32_t *phandle);
 
@@ -612,7 +649,7 @@ int fdt_next_property_offset(const void *fdt, int offset);
  *		...
  *	}
  *
- *	if ((property < 0) && (property != -FDT_ERR_NOT_FOUND)) {
+ *	if ((property < 0) && (property != -FDT_ERR_NOTFOUND)) {
  *		Error handling
  *	}
  *
@@ -718,7 +755,7 @@ static inline struct fdt_property *fdt_get_property_w(void *fdt, int nodeoffset,
 /**
  * fdt_getprop_by_offset - retrieve the value of a property at a given offset
  * @fdt: pointer to the device tree blob
- * @ffset: offset of the property to read
+ * @offset: offset of the property to read
  * @namep: pointer to a string variable (will be overwritten) or NULL
  * @lenp: pointer to an integer variable (will be overwritten) or NULL
  *
@@ -1431,7 +1468,7 @@ int fdt_nop_node(void *fdt, int nodeoffset);
 
 /**
  * fdt_create_with_flags - begin creation of a new fdt
- * @buf: pointer to memory allocated where fdt will be created
+ * @fdt: pointer to memory allocated where fdt will be created
  * @bufsize: size of the memory space at fdt
  * @flags: a valid combination of FDT_CREATE_FLAG_ flags, or 0.
  *
@@ -1449,7 +1486,7 @@ int fdt_create_with_flags(void *buf, int bufsize, uint32_t flags);
 
 /**
  * fdt_create - begin creation of a new fdt
- * @buf: pointer to memory allocated where fdt will be created
+ * @fdt: pointer to memory allocated where fdt will be created
  * @bufsize: size of the memory space at fdt
  *
  * fdt_create() is equivalent to fdt_create_with_flags() with flags=0.
@@ -1459,6 +1496,7 @@ int fdt_create_with_flags(void *buf, int bufsize, uint32_t flags);
  *	-FDT_ERR_NOSPACE, bufsize is insufficient for a minimal fdt
  */
 int fdt_create(void *buf, int bufsize);
+
 int fdt_resize(void *fdt, void *buf, int bufsize);
 int fdt_add_reservemap_entry(void *fdt, uint64_t addr, uint64_t size);
 int fdt_finish_reservemap(void *fdt);

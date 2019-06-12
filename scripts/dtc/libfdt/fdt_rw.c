@@ -137,6 +137,14 @@ static int fdt_splice_struct_(void *fdt, void *p,
 	return 0;
 }
 
+/* Must only be used to roll back in case of error */
+static void fdt_del_last_string_(void *fdt, const char *s)
+{
+	int newlen = strlen(s) + 1;
+
+	fdt_set_size_dt_strings(fdt, fdt_size_dt_strings(fdt) - newlen);
+}
+
 static int fdt_splice_string_(void *fdt, int newlen)
 {
 	void *p = (char *)fdt
@@ -150,15 +158,6 @@ static int fdt_splice_string_(void *fdt, int newlen)
 	return 0;
 }
 
-/**
- * fdt_find_add_string_() - Find or allocate a string
- *
- * @fdt: pointer to the device tree to check/adjust
- * @s: string to find/add
- * @allocated: Set to 0 if the string was found, 1 if not found and so
- *	allocated. Ignored if can_assume(NO_ROLLBACK)
- * @return offset of string in the string table (whether found or added)
- */
 static int fdt_find_add_string_(void *fdt, const char *s, int *allocated)
 {
 	char *strtab = (char *)fdt + fdt_off_dt_strings(fdt);
@@ -167,8 +166,7 @@ static int fdt_find_add_string_(void *fdt, const char *s, int *allocated)
 	int len = strlen(s) + 1;
 	int err;
 
-	if (!can_assume(NO_ROLLBACK))
-		*allocated = 0;
+	*allocated = 0;
 
 	p = fdt_find_string_(strtab, fdt_size_dt_strings(fdt), s);
 	if (p)
@@ -180,8 +178,7 @@ static int fdt_find_add_string_(void *fdt, const char *s, int *allocated)
 	if (err)
 		return err;
 
-	if (!can_assume(NO_ROLLBACK))
-		*allocated = 1;
+	*allocated = 1;
 
 	memcpy(new, s, len);
 	return (new - strtab);
@@ -241,11 +238,12 @@ static int fdt_add_property_(void *fdt, int nodeoffset, const char *name,
 	int nextoffset;
 	int namestroff;
 	int err;
+	int allocated;
 
 	if ((nextoffset = fdt_check_node_offset_(fdt, nodeoffset)) < 0)
 		return nextoffset;
 
-	namestroff = fdt_find_add_string_(fdt, name);
+	namestroff = fdt_find_add_string_(fdt, name, &allocated);
 	if (namestroff < 0)
 		return namestroff;
 
@@ -254,10 +252,10 @@ static int fdt_add_property_(void *fdt, int nodeoffset, const char *name,
 
 	err = fdt_splice_struct_(fdt, *prop, 0, proplen);
 	if (err) {
-		/* Delete the string if we failed to add it */
-		if (!can_assume(NO_ROLLBACK) && allocated)
+		if (allocated)
 			fdt_del_last_string_(fdt, name);
 		return err;
+	}
 
 	(*prop)->tag = cpu_to_fdt32(FDT_PROP);
 	(*prop)->nameoff = cpu_to_fdt32(namestroff);
