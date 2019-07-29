@@ -1212,7 +1212,6 @@ static void tcp_v6_reqsk_send_ack(const struct sock *sk, struct sk_buff *skb,
 #endif
 }
 
-
 #ifdef CONFIG_LGP_DATA_TCPIP_MPTCP
 struct sock *tcp_v6_cookie_check(struct sock *sk, struct sk_buff *skb)
 #else
@@ -1220,12 +1219,27 @@ static struct sock *tcp_v6_cookie_check(struct sock *sk, struct sk_buff *skb)
 #endif
 {
 #ifdef CONFIG_SYN_COOKIES
-	const struct tcphdr *th = tcp_hdr(skb);
+    const struct tcphdr *th = tcp_hdr(skb);
 
-	if (!th->syn)
-		sk = cookie_v6_check(sk, skb);
+    if (!th->syn)
+        sk = cookie_v6_check(sk, skb);
 #endif
-	return sk;
+    return sk;
+}
+
+u16 tcp_v6_get_syncookie(struct sock *sk, struct ipv6hdr *iph,
+             struct tcphdr *th, u32 *cookie)
+{
+    u16 mss = 0;
+#ifdef CONFIG_SYN_COOKIES
+    mss = tcp_get_syncookie_mss(&tcp6_request_sock_ops,
+                    &tcp_request_sock_ipv6_ops, sk, th);
+    if (mss) {
+        *cookie = __cookie_v6_init_sequence(iph, th, &mss);
+        tcp_synq_overflow(sk);
+    }
+#endif
+    return mss;
 }
 
 #ifdef CONFIG_LGP_DATA_TCPIP_MPTCP
