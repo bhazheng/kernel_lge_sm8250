@@ -17,6 +17,8 @@
  *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307
  *                                                                   USA
  */
+%locations
+
 %{
 #include <stdio.h>
 #include <inttypes.h>
@@ -31,6 +33,8 @@ extern void yyerror(char const *s);
 		srcpos_error((loc), "Error", __VA_ARGS__); \
 		treesource_error = true; \
 	} while (0)
+
+#define YYERROR_CALL(msg) yyerror(msg)
 
 extern struct dt_info *parser_output;
 extern bool treesource_error;

@@ -153,6 +153,61 @@ static inline void *fdt_offset_ptr_w(void *fdt, int offset, int checklen)
 
 uint32_t fdt_next_tag(const void *fdt, int offset, int *nextoffset);
 
+/*
+ * Alignment helpers:
+ *     These helpers access words from a device tree blob.  They're
+ *     built to work even with unaligned pointers on platforms (ike
+ *     ARM) that don't like unaligned loads and stores
+ */
+
+static inline uint32_t fdt32_ld(const fdt32_t *p)
+{
+	const uint8_t *bp = (const uint8_t *)p;
+
+	return ((uint32_t)bp[0] << 24)
+		| ((uint32_t)bp[1] << 16)
+		| ((uint32_t)bp[2] << 8)
+		| bp[3];
+}
+
+static inline void fdt32_st(void *property, uint32_t value)
+{
+	uint8_t *bp = (uint8_t *)property;
+
+	bp[0] = value >> 24;
+	bp[1] = (value >> 16) & 0xff;
+	bp[2] = (value >> 8) & 0xff;
+	bp[3] = value & 0xff;
+}
+
+static inline uint64_t fdt64_ld(const fdt64_t *p)
+{
+	const uint8_t *bp = (const uint8_t *)p;
+
+	return ((uint64_t)bp[0] << 56)
+		| ((uint64_t)bp[1] << 48)
+		| ((uint64_t)bp[2] << 40)
+		| ((uint64_t)bp[3] << 32)
+		| ((uint64_t)bp[4] << 24)
+		| ((uint64_t)bp[5] << 16)
+		| ((uint64_t)bp[6] << 8)
+		| bp[7];
+}
+
+static inline void fdt64_st(void *property, uint64_t value)
+{
+	uint8_t *bp = (uint8_t *)property;
+
+	bp[0] = value >> 56;
+	bp[1] = (value >> 48) & 0xff;
+	bp[2] = (value >> 40) & 0xff;
+	bp[3] = (value >> 32) & 0xff;
+	bp[4] = (value >> 24) & 0xff;
+	bp[5] = (value >> 16) & 0xff;
+	bp[6] = (value >> 8) & 0xff;
+	bp[7] = value & 0xff;
+}
+
 /**********************************************************************/
 /* Traversal functions                                                */
 /**********************************************************************/

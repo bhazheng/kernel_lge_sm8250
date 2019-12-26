@@ -76,6 +76,61 @@ static int fdt_nodename_eq_(const void *fdt, int offset,
 		return 0;
 }
 
+const char *fdt_get_string(const void *fdt, int stroffset, int *lenp)
+{
+	int32_t totalsize = fdt_ro_probe_(fdt);
+	uint32_t absoffset = stroffset + fdt_off_dt_strings(fdt);
+	size_t len;
+	int err;
+	const char *s, *n;
+
+	err = totalsize;
+	if (totalsize < 0)
+		goto fail;
+
+	err = -FDT_ERR_BADOFFSET;
+	if (absoffset >= totalsize)
+		goto fail;
+	len = totalsize - absoffset;
+
+	if (fdt_magic(fdt) == FDT_MAGIC) {
+		if (stroffset < 0)
+			goto fail;
+		if (fdt_version(fdt) >= 17) {
+			if (stroffset >= fdt_size_dt_strings(fdt))
+				goto fail;
+			if ((fdt_size_dt_strings(fdt) - stroffset) < len)
+				len = fdt_size_dt_strings(fdt) - stroffset;
+		}
+	} else if (fdt_magic(fdt) == FDT_SW_MAGIC) {
+		if ((stroffset >= 0)
+		    || (stroffset < -fdt_size_dt_strings(fdt)))
+			goto fail;
+		if ((-stroffset) < len)
+			len = -stroffset;
+	} else {
+		err = -FDT_ERR_INTERNAL;
+		goto fail;
+	}
+
+	s = (const char *)fdt + absoffset;
+	n = memchr(s, '\0', len);
+	if (!n) {
+		/* missing terminating NULL */
+		err = -FDT_ERR_TRUNCATED;
+		goto fail;
+	}
+
+	if (lenp)
+		*lenp = n - s;
+	return s;
+
+fail:
+	if (lenp)
+		*lenp = err;
+	return NULL;
+}
+
 const char *fdt_string(const void *fdt, int stroffset)
 {
 	return (const char *)fdt + fdt_off_dt_strings(fdt) + stroffset;
@@ -237,7 +292,7 @@ const char *fdt_get_name(const void *fdt, int nodeoffset, int *len)
 	const char *nameptr;
 	int err;
 
-	if (((err = fdt_check_header(fdt)) != 0)
+	if (((err = fdt_ro_probe_(fdt)) < 0)
 	    || ((err = fdt_check_node_offset_(fdt, nodeoffset)) < 0))
 			goto fail;
 
