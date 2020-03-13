@@ -299,7 +299,19 @@ fdt_set_hdr_(size_dt_struct);
 #undef fdt_set_hdr_
 
 /**
- * fdt_check_header - sanity check a device tree or possible device tree
+ * fdt_header_size - return the size of the tree's header
+ * @fdt: pointer to a flattened device tree
+ */
+size_t fdt_header_size(const void *fdt);
+
+/**
+ * fdt_header_size_ - internal function which takes a version number
+ */
+size_t fdt_header_size_(uint32_t version);
+
+/**
+ * fdt_check_header - sanity check a device tree header
+
  * @fdt: pointer to data which might be a flattened device tree
  *
  * fdt_check_header() checks that the given buffer contains what
