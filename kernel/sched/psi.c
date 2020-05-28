@@ -196,7 +196,6 @@ static void group_init(struct psi_group *group)
 	INIT_DELAYED_WORK(&group->avgs_work, psi_avgs_work);
 	mutex_init(&group->avgs_lock);
 	/* Init trigger-related members */
-	atomic_set(&group->poll_scheduled, 0);
 	mutex_init(&group->trigger_lock);
 	INIT_LIST_HEAD(&group->triggers);
 	memset(group->nr_triggers, 0, sizeof(group->nr_triggers));
@@ -205,8 +204,6 @@ static void group_init(struct psi_group *group)
 	memset(group->polling_total, 0, sizeof(group->polling_total));
 	group->polling_next_update = ULLONG_MAX;
 	group->polling_until = 0;
-	init_waitqueue_head(&group->poll_wait);
-	timer_setup(&group->poll_timer, poll_timer_fn, 0);
 	rcu_assign_pointer(group->poll_task, NULL);
 }
 
@@ -562,17 +559,18 @@ static u64 update_triggers(struct psi_group *group, u64 now)
 	return now + group->poll_min_period;
 }
 
-/* Schedule polling if it's not already scheduled or forced. */
-static void psi_schedule_poll_work(struct psi_group *group, unsigned long delay,
-				   bool force)
+/* Schedule polling if it's not already scheduled. */
+static void psi_schedule_poll_work(struct psi_group *group, unsigned long delay)
 {
 	struct task_struct *task;
 
 	/*
-	 * atomic_xchg should be called even when !force to provide a
-	 * full memory barrier (see the comment inside psi_poll_work).
+	 * Do not reschedule if already scheduled.
+	 * Possible race with a timer scheduled after this check but before
+	 * mod_timer below can be tolerated because group->polling_next_update
+	 * will keep updates on schedule.
 	 */
-	if (atomic_xchg(&group->poll_scheduled, 1) && !force)
+	if (timer_pending(&group->poll_timer))
 		return;
 
 	rcu_read_lock();
@@ -584,15 +582,12 @@ static void psi_schedule_poll_work(struct psi_group *group, unsigned long delay,
 	 */
 	if (likely(task))
 		mod_timer(&group->poll_timer, jiffies + delay);
-	else
-		atomic_set(&group->poll_scheduled, 0);
 
 	rcu_read_unlock();
 }
 
 static void psi_poll_work(struct psi_group *group)
 {
-	bool force_reschedule = false;
 	u32 changed_states;
 	u64 now;
 
@@ -1146,7 +1141,9 @@ struct psi_trigger *psi_trigger_create(struct psi_group *group,
 			return ERR_CAST(task);
 		}
 		atomic_set(&group->poll_wakeup, 0);
+		init_waitqueue_head(&group->poll_wait);
 		wake_up_process(task);
+		timer_setup(&group->poll_timer, poll_timer_fn, 0);
 		rcu_assign_pointer(group->poll_task, task);
 	}
 
@@ -1203,7 +1200,6 @@ void psi_trigger_destroy(struct psi_trigger *t)
 					group->poll_task,
 					lockdep_is_held(&group->trigger_lock));
 			rcu_assign_pointer(group->poll_task, NULL);
-			del_timer(&group->poll_timer);
 		}
 	}
 
@@ -1223,9 +1219,11 @@ void psi_trigger_destroy(struct psi_trigger *t)
 		/*
 		 * After the RCU grace period has expired, the worker
 		 * can no longer be found through group->poll_task.
+		 * But it might have been already scheduled before
+		 * that - deschedule it cleanly before destroying it.
 		 */
+		del_timer_sync(&group->poll_timer);
 		kthread_stop(task_to_destroy);
-		atomic_set(&group->poll_scheduled, 0);
 	}
 	kfree(t);
 }
