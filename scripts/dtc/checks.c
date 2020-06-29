@@ -1041,6 +1041,9 @@ static void check_i2c_bus_bridge(struct check *c, struct dt_info *dti, struct no
 }
 WARNING(i2c_bus_bridge, check_i2c_bus_bridge, NULL, &addr_size_cells);
 
+#define I2C_OWN_SLAVE_ADDRESS	(1U << 30)
+#define I2C_TEN_BIT_ADDRESS	(1U << 31)
+
 static void check_i2c_bus_reg(struct check *c, struct dt_info *dti, struct node *node)
 {
 	struct property *prop;
@@ -1063,6 +1066,8 @@ static void check_i2c_bus_reg(struct check *c, struct dt_info *dti, struct node 
 	}
 
 	reg = fdt32_to_cpu(*cells);
+	/* Ignore I2C_OWN_SLAVE_ADDRESS */
+	reg &= ~I2C_OWN_SLAVE_ADDRESS;
 	snprintf(unit_addr, sizeof(unit_addr), "%x", reg);
 	if (!streq(unitname, unit_addr))
 		FAIL(c, dti, node, "I2C bus unit address format error, expected \"%s\"",
@@ -1070,10 +1075,15 @@ static void check_i2c_bus_reg(struct check *c, struct dt_info *dti, struct node 
 
 	for (len = prop->val.len; len > 0; len -= 4) {
 		reg = fdt32_to_cpu(*(cells++));
-		if (reg > 0x3ff)
+		/* Ignore I2C_OWN_SLAVE_ADDRESS */
+		reg &= ~I2C_OWN_SLAVE_ADDRESS;
+
+		if ((reg & I2C_TEN_BIT_ADDRESS) && ((reg & ~I2C_TEN_BIT_ADDRESS) > 0x3ff))
 			FAIL_PROP(c, dti, node, prop, "I2C address must be less than 10-bits, got \"0x%x\"",
 				  reg);
-
+		else if (reg > 0x7f)
+			FAIL_PROP(c, dti, node, prop, "I2C address must be less than 7-bits, got \"0x%x\". Set I2C_TEN_BIT_ADDRESS for 10 bit addresses or fix the property",
+				  reg);
 	}
 }
 WARNING(i2c_bus_reg, check_i2c_bus_reg, NULL, &reg_format, &i2c_bus_bridge);
@@ -1563,106 +1573,21 @@ static void check_interrupt_provider(struct check *c,
 				     struct node *node)
 {
 	struct property *prop;
-	bool irq_provider = node_is_interrupt_provider(node);
+
+	if (!node_is_interrupt_provider(node))
+		return;
 
 	prop = get_property(node, "#interrupt-cells");
-	if (irq_provider && !prop) {
+	if (!prop)
 		FAIL(c, dti, node,
-		     "Missing '#interrupt-cells' in interrupt provider");
-		return;
-	}
+		     "Missing #interrupt-cells in interrupt provider");
 
-	if (!irq_provider && prop) {
+	prop = get_property(node, "#address-cells");
+	if (!prop)
 		FAIL(c, dti, node,
-		     "'#interrupt-cells' found, but node is not an interrupt provider");
-		return;
-	}
+		     "Missing #address-cells in interrupt provider");
 }
-WARNING(interrupt_provider, check_interrupt_provider, NULL, &interrupts_extended_is_cell);
-
-static void check_interrupt_map(struct check *c,
-				struct dt_info *dti,
-				struct node *node)
-{
-	struct node *root = dti->dt;
-	struct property *prop, *irq_map_prop;
-	size_t cellsize, cell, map_cells;
-
-	irq_map_prop = get_property(node, "interrupt-map");
-	if (!irq_map_prop)
-		return;
-
-	if (node->addr_cells < 0) {
-		FAIL(c, dti, node,
-		     "Missing '#address-cells' in interrupt-map provider");
-		return;
-	}
-	cellsize = node_addr_cells(node);
-	cellsize += propval_cell(get_property(node, "#interrupt-cells"));
-
-	prop = get_property(node, "interrupt-map-mask");
-	if (prop && (prop->val.len != (cellsize * sizeof(cell_t))))
-		FAIL_PROP(c, dti, node, prop,
-			  "property size (%d) is invalid, expected %zu",
-			  prop->val.len, cellsize * sizeof(cell_t));
-
-	if (!is_multiple_of(irq_map_prop->val.len, sizeof(cell_t))) {
-		FAIL_PROP(c, dti, node, irq_map_prop,
-			  "property size (%d) is invalid, expected multiple of %zu",
-			  irq_map_prop->val.len, sizeof(cell_t));
-		return;
-	}
-
-	map_cells = irq_map_prop->val.len / sizeof(cell_t);
-	for (cell = 0; cell < map_cells; ) {
-		struct node *provider_node;
-		struct property *cellprop;
-		int phandle;
-		size_t parent_cellsize;
-
-		if ((cell + cellsize) >= map_cells) {
-			FAIL_PROP(c, dti, node, irq_map_prop,
-				  "property size (%d) too small, expected > %zu",
-				  irq_map_prop->val.len, (cell + cellsize) * sizeof(cell_t));
-			break;
-		}
-		cell += cellsize;
-
-		phandle = propval_cell_n(irq_map_prop, cell);
-		if (!phandle_is_valid(phandle)) {
-			/* Give up if this is an overlay with external references */
-			if (!(dti->dtsflags & DTSF_PLUGIN))
-				FAIL_PROP(c, dti, node, irq_map_prop,
-					  "Cell %zu is not a phandle(%d)",
-					  cell, phandle);
-			break;
-		}
-
-		provider_node = get_node_by_phandle(root, phandle);
-		if (!provider_node) {
-			FAIL_PROP(c, dti, node, irq_map_prop,
-				  "Could not get phandle(%d) node for (cell %zu)",
-				  phandle, cell);
-			break;
-		}
-
-		cellprop = get_property(provider_node, "#interrupt-cells");
-		if (cellprop) {
-			parent_cellsize = propval_cell(cellprop);
-		} else {
-			FAIL(c, dti, node, "Missing property '#interrupt-cells' in node %s or bad phandle (referred from interrupt-map[%zu])",
-			     provider_node->fullpath, cell);
-			break;
-		}
-
-		cellprop = get_property(provider_node, "#address-cells");
-		if (cellprop)
-			parent_cellsize += propval_cell(cellprop);
-
-		cell += 1 + parent_cellsize;
-	}
-}
-WARNING(interrupt_map, check_interrupt_map, NULL, &phandle_references, &addr_size_cells, &interrupt_provider);
+WARNING(interrupt_provider, check_interrupt_provider, NULL);
 
 static void check_interrupts_property(struct check *c,
 				      struct dt_info *dti,
@@ -1962,7 +1887,6 @@ static struct check *check_table[] = {
 	&gpios_property,
 	&interrupts_property,
 	&interrupt_provider,
-	&interrupt_map,
 
 	&alias_paths,
 
