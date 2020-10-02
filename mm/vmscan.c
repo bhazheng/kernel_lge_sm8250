@@ -1936,6 +1936,7 @@ putback_inactive_pages(struct lruvec *lruvec, struct list_head *page_list)
 		lruvec = mem_cgroup_page_lruvec(page, pgdat);
 
 		SetPageLRU(page);
+		lru = page_lru(page);
 		add_page_to_lru_list(page, lruvec);
 
 		if (PageActive(page)) {
@@ -2127,7 +2128,7 @@ static unsigned move_active_pages_to_lru(struct lruvec *lruvec,
 		VM_BUG_ON_PAGE(PageLRU(page), page);
 		list_del(&page->lru);
 		SetPageLRU(page);
-		add_page_to_lru_list(page, lruvec, lru);
+		add_page_to_lru_list(page, lruvec);
 
 		if (put_page_testzero(page)) {
 			del_page_from_lru_list(page, lruvec);
@@ -7148,8 +7149,9 @@ void check_move_unevictable_pages(struct page **pages, int nr_pages)
 			continue;
 
 		if (page_evictable(page)) {
-			del_page_from_lru_list(page, lruvec);
+			VM_BUG_ON_PAGE(PageActive(page), page);
 			ClearPageUnevictable(page);
+			del_page_from_lru_list(page, lruvec, LRU_UNEVICTABLE);
 			add_page_to_lru_list(page, lruvec);
 			pgrescued++;
 		}
