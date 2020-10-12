@@ -138,8 +138,8 @@ static inline uint32_t sw_flags(void *fdt)
 
 static void *fdt_grab_space_(void *fdt, size_t len)
 {
-	int offset = fdt_size_dt_struct(fdt);
-	int spaceleft;
+	unsigned int offset = fdt_size_dt_struct(fdt);
+	unsigned int spaceleft;
 
 	spaceleft = fdt_totalsize(fdt) - fdt_off_dt_struct(fdt)
 		- fdt_size_dt_strings(fdt);
@@ -153,6 +153,8 @@ static void *fdt_grab_space_(void *fdt, size_t len)
 
 int fdt_create(void *buf, int bufsize)
 {
+	const int hdrsize = FDT_ALIGN(sizeof(struct fdt_header),
+				      sizeof(struct fdt_reserve_entry));
 	void *fdt = buf;
 
 	if (bufsize < sizeof(struct fdt_header))
@@ -180,14 +182,17 @@ int fdt_resize(void *fdt, void *buf, int bufsize)
 
 	FDT_SW_CHECK_HEADER(fdt);
 
-	headsize = fdt_off_dt_struct(fdt);
+	if (bufsize < 0)
+		return -FDT_ERR_NOSPACE;
+
+	headsize = fdt_off_dt_struct(fdt) + fdt_size_dt_struct(fdt);
 	tailsize = fdt_size_dt_strings(fdt);
 
 	if (!can_assume(VALID_DTB) &&
 	    headsize + tailsize > fdt_totalsize(fdt))
 		return -FDT_ERR_INTERNAL;
 
-	if ((headsize + tailsize) > bufsize)
+	if ((headsize + tailsize) > (unsigned)bufsize)
 		return -FDT_ERR_NOSPACE;
 
 	oldtail = (char *)fdt + fdt_totalsize(fdt) - tailsize;
@@ -270,24 +275,18 @@ int fdt_end_node(void *fdt)
 static int fdt_find_add_string_(void *fdt, const char *s)
 {
 	char *strtab = (char *)fdt + fdt_totalsize(fdt);
-	const char *p;
-	int strtabsize = fdt_size_dt_strings(fdt);
-	int len = strlen(s) + 1;
-	int struct_top, offset;
+	unsigned int strtabsize = fdt_size_dt_strings(fdt);
+	unsigned int len = strlen(s) + 1;
+	unsigned int struct_top, offset;
 
-	p = fdt_find_string_(strtab - strtabsize, strtabsize, s);
-	if (p)
-		return p - strtab;
-
-	/* Add it */
-	offset = -strtabsize - len;
+	offset = strtabsize + len;
 	struct_top = fdt_off_dt_struct(fdt) + fdt_size_dt_struct(fdt);
-	if (fdt_totalsize(fdt) + offset < struct_top)
+	if (fdt_totalsize(fdt) - offset < struct_top)
 		return 0; /* no more room :( */
 
-	memcpy(strtab + offset, s, len);
+	memcpy(strtab - offset, s, len);
 	fdt_set_size_dt_strings(fdt, strtabsize + len);
-	return offset;
+	return -offset;
 }
 
 int fdt_property_placeholder(void *fdt, const char *name, int len, void **valp)
