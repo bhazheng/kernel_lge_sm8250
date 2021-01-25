@@ -163,7 +163,8 @@ long kgsl_ioctl_helper(struct file *filep, unsigned int cmd, unsigned long arg,
 	return ret;
 }
 
-long kgsl_ioctl(struct file *filep, unsigned int cmd, unsigned long arg)
+static long __kgsl_ioctl(struct file *filep, unsigned int cmd,
+			 unsigned long arg)
 {
 	struct kgsl_device_private *dev_priv = filep->private_data;
 	struct kgsl_device *device = dev_priv->device;
@@ -202,7 +203,7 @@ long kgsl_ioctl(struct file *filep, unsigned int cmd, unsigned long arg)
 	 */
 	struct pm_qos_request req = {
 		.type = PM_QOS_REQ_AFFINE_CORES,
-		.cpus_affine = BIT(raw_smp_processor_id())
+		.cpus_affine = ATOMIC_INIT(BIT(raw_smp_processor_id()))
 	};
 	long ret;
 
