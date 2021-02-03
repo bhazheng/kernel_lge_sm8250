@@ -166,8 +166,8 @@ int fdt_get_mem_rsv(const void *fdt, int n, uint64_t *address, uint64_t *size)
 	if (!re)
 		return -FDT_ERR_BADOFFSET;
 
-	*address = fdt64_ld(&re->address);
-	*size = fdt64_ld(&re->size);
+	*address = fdt64_ld_(&re->address);
+	*size = fdt64_ld_(&re->size);
 	return 0;
 }
 
@@ -177,7 +177,7 @@ int fdt_num_mem_rsv(const void *fdt)
 	const struct fdt_reserve_entry *re;
 
 	for (i = 0; (re = fdt_mem_rsv(fdt, i)) != NULL; i++) {
-		if (fdt64_ld(&re->size) == 0)
+		if (fdt64_ld_(&re->size) == 0)
 			return i;
 	}
 	return -FDT_ERR_TRUNCATED;
@@ -355,7 +355,7 @@ static const struct fdt_property *fdt_get_property_by_offset_(const void *fdt,
 	prop = fdt_offset_ptr_(fdt, offset);
 
 	if (lenp)
-		*lenp = fdt32_ld(&prop->len);
+		*lenp = fdt32_ld_(&prop->len);
 
 	return prop;
 }
@@ -393,7 +393,7 @@ static const struct fdt_property *fdt_get_property_namelen_(const void *fdt,
 			offset = -FDT_ERR_INTERNAL;
 			break;
 		}
-		if (fdt_string_eq_(fdt, fdt32_ld(&prop->nameoff),
+		if (fdt_string_eq_(fdt, fdt32_ld_(&prop->nameoff),
 				   name, namelen)) {
 			if (poffset)
 				*poffset = offset;
@@ -445,8 +445,8 @@ const void *fdt_getprop_namelen(const void *fdt, int nodeoffset,
 		return NULL;
 
 	/* Handle realignment */
-	if (fdt_version(fdt) < 0x10 && (poffset + sizeof(*prop)) % 8 &&
-	    fdt32_ld(&prop->len) >= 8)
+	if (!can_assume(LATEST) && fdt_version(fdt) < 0x10 &&
+	    (poffset + sizeof(*prop)) % 8 && fdt32_ld_(&prop->len) >= 8)
 		return prop->data + 4;
 	return prop->data;
 }
@@ -462,19 +462,25 @@ const void *fdt_getprop_by_offset(const void *fdt, int offset,
 	if (namep) {
 		const char *name;
 		int namelen;
-		name = fdt_get_string(fdt, fdt32_ld(&prop->nameoff),
-				      &namelen);
-		if (!name) {
-			if (lenp)
-				*lenp = namelen;
-			return NULL;
+
+		if (!can_assume(VALID_INPUT)) {
+			name = fdt_get_string(fdt, fdt32_ld_(&prop->nameoff),
+					      &namelen);
+			if (!name) {
+				if (lenp)
+					*lenp = namelen;
+				return NULL;
+			}
+			*namep = name;
+		} else {
+			*namep = fdt_string(fdt, fdt32_ld_(&prop->nameoff));
 		}
 		*namep = name;
 	}
 
 	/* Handle realignment */
-	if (fdt_version(fdt) < 0x10 && (offset + sizeof(*prop)) % 8 &&
-	    fdt32_ld(&prop->len) >= 8)
+	if (!can_assume(LATEST) && fdt_version(fdt) < 0x10 &&
+	    (offset + sizeof(*prop)) % 8 && fdt32_ld_(&prop->len) >= 8)
 		return prop->data + 4;
 	return prop->data;
 }
@@ -499,7 +505,7 @@ uint32_t fdt_get_phandle(const void *fdt, int nodeoffset)
 			return 0;
 	}
 
-	return fdt32_ld(php);
+	return fdt32_ld_(php);
 }
 
 const char *fdt_get_alias_namelen(const void *fdt,

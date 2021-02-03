@@ -102,7 +102,11 @@ extern "C" {
 	/* FDT_ERR_BADFLAGS: The function was passed a flags field that
 	 * contains invalid flags or an invalid combination of flags. */
 
-#define FDT_ERR_MAX		18
+#define FDT_ERR_ALIGNMENT	19
+	/* FDT_ERR_ALIGNMENT: The device tree base address is not 8-byte
+	 * aligned. */
+
+#define FDT_ERR_MAX		19
 
 /* constants */
 #define FDT_MAX_PHANDLE 0xfffffffe
@@ -123,12 +127,10 @@ static inline void *fdt_offset_ptr_w(void *fdt, int offset, int checklen)
 uint32_t fdt_next_tag(const void *fdt, int offset, int *nextoffset);
 
 /*
- * Alignment helpers:
- *     These helpers access words from a device tree blob.  They're
- *     built to work even with unaligned pointers on platforms (ike
- *     ARM) that don't like unaligned loads and stores
+ * External helpers to access words from a device tree blob. They're built
+ * to work even with unaligned pointers on platforms (such as ARMv5) that don't
+ * like unaligned loads and stores.
  */
-
 static inline uint32_t fdt32_ld(const fdt32_t *p)
 {
 	const uint8_t *bp = (const uint8_t *)p;
@@ -269,6 +271,16 @@ fdt_set_hdr_(size_dt_struct);
 /**
  * fdt_header_size - return the size of the tree's header
  * @fdt: pointer to a flattened device tree
+ *
+ * Return: size of DTB header in bytes
+ */
+size_t fdt_header_size(const void *fdt);
+
+/**
+ * fdt_header_size_ - internal function to get header size from a version number
+ * @version: devicetree version number
+ *
+ * Return: size of DTB header in bytes
  */
 size_t fdt_header_size_(uint32_t version);
 static inline size_t fdt_header_size(const void *fdt)
@@ -278,7 +290,6 @@ static inline size_t fdt_header_size(const void *fdt)
 
 /**
  * fdt_check_header - sanity check a device tree header
-
  * @fdt: pointer to data which might be a flattened device tree
  *
  * fdt_check_header() checks that the given buffer contains what
@@ -403,8 +414,7 @@ static inline uint32_t fdt_get_max_phandle(const void *fdt)
  * highest phandle value in the device tree blob) will be returned in the
  * @phandle parameter.
  *
- * Returns:
- *   0 on success or a negative error-code on failure
+ * Return: 0 on success or a negative error-code on failure
  */
 int fdt_generate_phandle(const void *fdt, uint32_t *phandle);
 
@@ -1423,7 +1433,7 @@ int fdt_nop_node(void *fdt, int nodeoffset);
 
 /**
  * fdt_create_with_flags - begin creation of a new fdt
- * @fdt: pointer to memory allocated where fdt will be created
+ * @buf: pointer to memory allocated where fdt will be created
  * @bufsize: size of the memory space at fdt
  * @flags: a valid combination of FDT_CREATE_FLAG_ flags, or 0.
  *
@@ -1441,7 +1451,7 @@ int fdt_create_with_flags(void *buf, int bufsize, uint32_t flags);
 
 /**
  * fdt_create - begin creation of a new fdt
- * @fdt: pointer to memory allocated where fdt will be created
+ * @buf: pointer to memory allocated where fdt will be created
  * @bufsize: size of the memory space at fdt
  *
  * fdt_create() is equivalent to fdt_create_with_flags() with flags=0.
