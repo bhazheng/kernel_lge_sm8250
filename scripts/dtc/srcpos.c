@@ -33,6 +33,9 @@ struct search_path {
 /* This is the list of directories that we search for source files */
 static struct search_path *search_path_head, **search_path_tail;
 
+/* Detect infinite include recursion. */
+#define MAX_SRCFILE_DEPTH     (200)
+static int srcfile_depth; /* = 0 */
 
 static char *get_dirname(const char *path)
 {

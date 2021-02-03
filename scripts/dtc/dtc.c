@@ -128,6 +128,10 @@ static const char *guess_type_by_name(const char *fname, const char *fallback)
 		return fallback;
 	if (!strcasecmp(s, ".dts"))
 		return "dts";
+	if (!strcasecmp(s, ".yaml"))
+		return "yaml";
+	if (!strcasecmp(s, ".dtbo"))
+		return "dtb";
 	if (!strcasecmp(s, ".dtb"))
 		return "dtb";
 	return fallback;
@@ -351,6 +355,8 @@ int main(int argc, char *argv[])
 	if (streq(outform, "dts")) {
 		dt_to_source(outf, dti);
 	} else if (streq(outform, "dtb")) {
+		dt_to_blob(outf, dti, outversion);
+	} else if (streq(outform, "dtbo")) {
 		dt_to_blob(outf, dti, outversion);
 	} else if (streq(outform, "asm")) {
 		dt_to_asm(outf, dti, outversion);
