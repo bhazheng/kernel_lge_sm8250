@@ -541,9 +541,6 @@ static void _msm_drm_commit_work_cb(struct kthread_work *work)
 		.cpus_affine = BIT(raw_smp_processor_id())
 	};
 
-	start = ktime_get();
-	frame_stat_collector(0, COMMIT_START_TS);
-
 	/*
 	 * Optimistically assume the current task won't migrate to another CPU
 	 * and restrict the current CPU to shallow idle states so that it won't
@@ -554,10 +551,6 @@ static void _msm_drm_commit_work_cb(struct kthread_work *work)
 	complete_commit(commit);
 	SDE_ATRACE_END("complete_commit");
 	pm_qos_remove_request(&req);
-
-	end = ktime_get();
-	duration = ktime_to_ns(ktime_sub(end, start));
-	frame_stat_collector(duration, COMMIT_END_TS);
 
 	complete_commit_cleanup(commit);
 }
