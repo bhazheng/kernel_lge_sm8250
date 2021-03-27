@@ -7,7 +7,7 @@ set -e # Hentikan skrip jika ada perintah yang gagal
 SECONDS=0 # Timer bawaan bash
 ZIPNAME="Bhazheng-kernel-LMV600$(date '+%Y%m%d-%H%M').zip"
 AK3_DIR="$HOME/android/AnyKernel3"
-DEFCONFIG="vendor/timelm-perf_defconfig"
+DEFCONFIG="vendor/arabella_defconfig"
 LOCAL_SAVE_DIR="$HOME" # Direktori penyimpanan lokal
 LOG_FILE="$LOCAL_SAVE_DIR/build_$(date '+%Y%m%d-%H%M').log" # Nama file log
 DESKTOP_DIR="$HOME/Desktop" # Direktori Desktop
@@ -21,7 +21,7 @@ export KBUILD_BUILD_USER=Bhazheng
 export KBUILD_BUILD_HOST=cachyos
 export ARCH=arm64
 export SUBARCH=ARM64
-export CLANG_PATH="$HOME/Toolchain/neutron-clang/bin" # Gunakan path absolut untuk CLANG_PATH
+export CLANG_PATH="$HOME/Toolchain/r547379/bin" # Gunakan path absolut untuk CLANG_PATH
 export PATH="$CLANG_PATH:$PATH"
 export DTC_EXT="$LOCAL_SAVE_DIR/Toolchain/dtc_kernel/linux-x86/dtc/dtc" # Gunakan path absolut
 
@@ -53,10 +53,3 @@ echo -e "\nStarting compilation...\n" | tee -a "$LOG_FILE"
 
 # Kompilasi Kernel
 make -j$(nproc) O=out CC=clang CROSS_COMPILE=aarch64-linux-gnu- LLVM=1 LLVM_IAS=1 Image.gz-dtb &>> "$LOG_FILE"
-y
-2
-n
-n
-y
-1
-y
