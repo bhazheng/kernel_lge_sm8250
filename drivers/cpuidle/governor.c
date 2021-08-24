@@ -118,3 +118,4 @@ s64 cpuidle_governor_latency_req(unsigned int cpu)
 
 	return (s64)device_req * NSEC_PER_USEC;
 }
+EXPORT_SYMBOL_GPL(cpuidle_governor_latency_req);
