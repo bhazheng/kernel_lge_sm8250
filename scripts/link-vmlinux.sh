@@ -39,18 +39,22 @@ info()
 	fi
 }
 
-# If CONFIG_LTO_CLANG is selected, collect generated symbol versions into
-# .tmp_symversions.lds
-gen_symversions()
+# Thin archive build here makes a final archive with symbol table and indexes
+# from vmlinux objects INIT and MAIN, which can be used as input to linker.
+# KBUILD_VMLINUX_LIBS archives should already have symbol table and indexes
+# added.
+#
+# Traditional incremental style of link does not require this step
+#
+# built-in.a output file
+#
+archive_builtin()
 {
-	info GEN .tmp_symversions.lds
-	rm -f .tmp_symversions.lds
-
-	for o in ${KBUILD_VMLINUX_OBJS} ${KBUILD_VMLINUX_LIBS}; do
-		if [ -f ${o}.symversions ]; then
-			cat ${o}.symversions >> .tmp_symversions.lds
-		fi
-	done
+	info AR built-in.a
+	rm -f built-in.a;
+	${AR} rcsTP${KBUILD_ARFLAGS} built-in.a			\
+				${KBUILD_VMLINUX_INIT}		\
+				${KBUILD_VMLINUX_MAIN}
 }
 
 # Link of vmlinux.o used for section mismatch analysis
@@ -67,20 +71,7 @@ modpost_link()
 		${KBUILD_VMLINUX_LIBS}				\
 		--end-group"
 
-	if [ -n "${CONFIG_LTO_CLANG}" ]; then
-		if [ -n "${CONFIG_MODVERSIONS}" ]; then
-			gen_symversions
-			lds="${lds} -T .tmp_symversions.lds"
-		fi
-
-		# This might take a while, so indicate that we're doing
-		# an LTO link
-		info LTO ${1}
-	else
-		info LD ${1}
-	fi
-
-	${LD} ${KBUILD_LDFLAGS} -r -o ${1} $(lto_lds) ${objects}
+	${LD} ${KBUILD_LDFLAGS} -r -o ${1} ${objects}
 }
 
 # Link of vmlinux
@@ -92,22 +83,13 @@ vmlinux_link()
 	local objects
 
 	if [ "${SRCARCH}" != "um" ]; then
-		if [ -n "${CONFIG_LTO_CLANG}" ]; then
-			# Use vmlinux.o instead of performing the slow LTO
-			# link again.
-			objects="--whole-archive	\
-				vmlinux.o 				\
-				--no-whole-archive		\
-				${1}"
-		else
-			objects="--whole-archive	\
-				${KBUILD_VMLINUX_OBJS}	\
-				--no-whole-archive		\
-				--start-group			\
-				${KBUILD_VMLINUX_LIBS}	\
-				--end-group
-				${1}"
-		fi
+		objects="--whole-archive			\
+			built-in.a				\
+			--no-whole-archive			\
+			--start-group				\
+			${KBUILD_VMLINUX_LIBS}			\
+			--end-group				\
+			${1}"
 
 		${LD} ${KBUILD_LDFLAGS} ${LDFLAGS_vmlinux} -o ${2}	\
 			-T ${lds} ${objects}
@@ -254,6 +236,7 @@ ${MAKE} -f "${srctree}/scripts/Makefile.build" obj=init
 archive_builtin
 
 #link vmlinux.o
+info LD vmlinux.o
 modpost_link vmlinux.o
 
 # modpost vmlinux.o to check for section mismatches
