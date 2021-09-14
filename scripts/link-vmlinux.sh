@@ -53,17 +53,6 @@ gen_symversions()
 	done
 }
 
-# Generate a linker script to ensure correct ordering of initcalls.
-gen_initcalls()
-{
-	info GEN .tmp_initcalls.lds
-
-	${PYTHON} ${srctree}/scripts/jobserver-exec		\
-	${PERL} ${srctree}/scripts/generate_initcall_order.pl	\
-		${KBUILD_VMLINUX_OBJS} ${KBUILD_VMLINUX_LIBS}	\
-		> .tmp_initcalls.lds
-}
-
 # Link of vmlinux.o used for section mismatch analysis
 # ${1} output file
 modpost_link()
@@ -79,9 +68,6 @@ modpost_link()
 		--end-group"
 
 	if [ -n "${CONFIG_LTO_CLANG}" ]; then
-		gen_initcalls
-		lds="-T .tmp_initcalls.lds"
-
 		if [ -n "${CONFIG_MODVERSIONS}" ]; then
 			gen_symversions
 			lds="${lds} -T .tmp_symversions.lds"
@@ -94,7 +80,7 @@ modpost_link()
 		info LD ${1}
 	fi
 
-	${LD} ${KBUILD_LDFLAGS} -r -o ${1} ${objects}
+	${LD} ${KBUILD_LDFLAGS} -r -o ${1} ${lds} ${objects}
 }
 
 # Link of vmlinux
@@ -210,7 +196,6 @@ sortextable()
 cleanup()
 {
 	rm -f .tmp_System.map
-	rm -f .tmp_initcalls.lds
 	rm -f .tmp_symversions.lds
 	rm -f .tmp_kallsyms*
 	rm -f .tmp_symversions
