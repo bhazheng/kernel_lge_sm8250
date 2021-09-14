@@ -850,7 +850,6 @@ ifdef CONFIG_CC_HAS_AUTO_VAR_INIT_ZERO_ENABLER
 # https://github.com/llvm/llvm-project/issues/44842
 KBUILD_CFLAGS	+= -enable-trivial-auto-var-init-zero-knowing-it-will-be-removed-from-clang
 endif
-endif
 
 KBUILD_CFLAGS   += $(call cc-option, -Wvla)
 
