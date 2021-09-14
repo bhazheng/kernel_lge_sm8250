@@ -497,13 +497,31 @@ cmd_link_multi-m =						\
 	rm -f $@; 						\
 	$(AR) cDPrsT $@ $(filter %.o,$^)
 else
+cmd_export_list = $(OBJDUMP) -h $< | $(filter_export_list) >$(ksyms-lds); \
+	$(link_export_list)
+endif
+
+$(obj)/lib-ksyms.o: $(lib-target) FORCE
+	$(call if_changed,export_list)
+
+targets += $(obj)/lib-ksyms.o
+
+endif
+
+cmd_link_multi-link = $(LD) $(ld_flags) -r -o $@ $(filter %.o,$^) $(cmd_secanalysis)
+
+quiet_cmd_link_multi-y = AR      $@
+cmd_link_multi-y = $(update_lto_symversions) \
+	rm -f $@; $(AR) rcSTP$(KBUILD_ARFLAGS) $@ $(link_multi_deps) \
+	$(update_lto_symtable)
+
 quiet_cmd_link_multi-m = LD [M]  $@
 cmd_link_multi-m = $(LD) $(ld_flags) -r -o $@ $(filter %.o,$^) $(cmd_secanalysis)
 endif
 
 $(multi-used-m): FORCE
 	$(call if_changed,link_multi-m)
-	@{ echo $(@:.o=.ko); echo $(link_multi_deps); \
+	@{ echo $(@:.o=.ko); echo $(filter %.o,$^); \
 	   $(cmd_undef_syms); } > $(MODVERDIR)/$(@F:.o=.mod)
 
 $(call multi_depend, $(multi-used-m), .o, -objs -y -m)
