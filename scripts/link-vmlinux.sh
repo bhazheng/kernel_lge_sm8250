@@ -80,7 +80,7 @@ modpost_link()
 		info LD ${1}
 	fi
 
-	${LD} ${KBUILD_LDFLAGS} -r -o ${1} ${lds} ${objects}
+	${LD} ${KBUILD_LDFLAGS} -r -o ${1} $(lto_lds) ${objects}
 }
 
 # Link of vmlinux
@@ -258,11 +258,6 @@ modpost_link vmlinux.o
 
 # modpost vmlinux.o to check for section mismatches
 ${MAKE} -f "${srctree}/scripts/Makefile.modpost" vmlinux.o
-
-if [ -n "${CONFIG_LTO_CLANG}" ]; then
-	# Call recordmcount if needed
-	recordmcount vmlinux.o
-fi
 
 # Generate RTIC MP placeholder compile unit of the correct size
 # and add it to the list of link objects
