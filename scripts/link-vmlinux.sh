@@ -88,8 +88,8 @@ modpost_link()
 
 	objects="--whole-archive				\
 		${KBUILD_VMLINUX_OBJS}				\
-		--no-whole-archive					\
-		--start-group						\
+		--no-whole-archive				\
+		--start-group					\
 		${KBUILD_VMLINUX_LIBS}				\
 		--end-group"
 
@@ -118,30 +118,19 @@ vmlinux_link()
 	local objects
 
 	if [ "${SRCARCH}" != "um" ]; then
-		if [ -n "${CONFIG_LTO_CLANG}" ]; then
-			# Use vmlinux.o instead of performing the slow LTO
-			# link again.
-			objects="--whole-archive	\
-				vmlinux.o 				\
-				--no-whole-archive		\
-				${1}"
-		else
-			objects="--whole-archive	\
-				${KBUILD_VMLINUX_OBJS}	\
-				--no-whole-archive		\
-				--start-group			\
-				${KBUILD_VMLINUX_LIBS}	\
-				--end-group
-				${1}"
-		fi
+		objects="--whole-archive	\
+			${KBUILD_VMLINUX_OBJS}	\
+			--start-group			\
+			${KBUILD_VMLINUX_LIBS}	\
+			--end-group				\
+			${1}"
 
 		${LD} ${KBUILD_LDFLAGS} ${LDFLAGS_vmlinux} -o ${2}	\
 			-T ${lds} ${objects}
 	else
-		objects="-Wl,--whole-archive			\
-			${KBUILD_VMLINUX_INIT}			\
-			${KBUILD_VMLINUX_MAIN}			\
-			-Wl,--no-whole-archive			\
+		objects="-Wl,--whole-archive	\
+			${KBUILD_VMLINUX_OBJS}		\
+			-Wl,--no-whole-archive		\
 			-Wl,--start-group			\
 			${KBUILD_VMLINUX_LIBS}		\
 			-Wl,--end-group				\
