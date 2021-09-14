@@ -46,37 +46,11 @@ gen_symversions()
 	info GEN .tmp_symversions.lds
 	rm -f .tmp_symversions.lds
 
-	# rebuild with llvm-ar to update the symbol table
-	if [ -n "${CONFIG_LTO_CLANG}" ]; then
-		mv -f built-in.a built-in.a.tmp
-		${LLVM_AR} rcsT${KBUILD_ARFLAGS} built-in.a $(${AR} t built-in.a.tmp)
-		rm -f built-in.a.tmp
-	fi
-}
-
-# If CONFIG_LTO_CLANG is selected, collect generated symbol versions into
-# .tmp_symversions
-modversions()
-{
-	if [ -z "${CONFIG_LTO_CLANG}" ]; then
-		return
-	fi
-
-	if [ -z "${CONFIG_MODVERSIONS}" ]; then
-		return
-	fi
-
-	rm -f .tmp_symversions
-
-	for a in built-in.a ${KBUILD_VMLINUX_LIBS}; do
-		for o in $(${AR} t $a); do
-			if [ -f ${o}.symversions ]; then
-				cat ${o}.symversions >> .tmp_symversions
-			fi
-		done
+	for o in ${KBUILD_VMLINUX_OBJS} ${KBUILD_VMLINUX_LIBS}; do
+		if [ -f ${o}.symversions ]; then
+			cat ${o}.symversions >> .tmp_symversions.lds
+		fi
 	done
-
-	echo "-T .tmp_lto.lds"
 }
 
 # Generate a linker script to ensure correct ordering of initcalls.
@@ -105,6 +79,14 @@ modpost_link()
 		--end-group"
 
 	if [ -n "${CONFIG_LTO_CLANG}" ]; then
+		gen_initcalls
+		lds="-T .tmp_initcalls.lds"
+
+		if [ -n "${CONFIG_MODVERSIONS}" ]; then
+			gen_symversions
+			lds="${lds} -T .tmp_symversions.lds"
+		fi
+
 		# This might take a while, so indicate that we're doing
 		# an LTO link
 		info LTO ${1}
