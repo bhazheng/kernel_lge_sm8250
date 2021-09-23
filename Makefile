@@ -809,9 +809,11 @@ endif
 KBUILD_CFLAGS += $(call cc-disable-warning, unused-but-set-variable)
 
 ifdef CONFIG_LTO_CLANG
-KBUILD_LDFLAGS += -O3 --lto-O3 --strip-debug
+KBUILD_LDFLAGS += -O3 --lto-O3
+LDFLAGS += -O3 --lto-O3
 else
-KBUILD_LDFLAGS += -O3 --strip-debug
+KBUILD_LDFLAGS += -O3
+LDFLAGS += -O3
 endif
 
 KBUILD_CFLAGS += $(call cc-disable-warning, unused-const-variable)
