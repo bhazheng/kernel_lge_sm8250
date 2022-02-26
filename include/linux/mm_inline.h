@@ -104,15 +104,7 @@ static __always_inline enum lru_list page_lru(struct page *page)
 
 static inline bool lru_gen_enabled(void)
 {
-#ifdef CONFIG_LRU_GEN_ENABLED
-	DECLARE_STATIC_KEY_TRUE(lru_gen_caps[NR_LRU_GEN_CAPS]);
-
-	return static_branch_likely(&lru_gen_caps[LRU_GEN_CORE]);
-#else
-	DECLARE_STATIC_KEY_FALSE(lru_gen_caps[NR_LRU_GEN_CAPS]);
-
-	return static_branch_unlikely(&lru_gen_caps[LRU_GEN_CORE]);
-#endif
+	return true;
 }
 
 static inline bool lru_gen_in_fault(void)
@@ -123,19 +115,6 @@ static inline bool lru_gen_in_fault(void)
 static inline int lru_gen_from_seq(unsigned long seq)
 {
 	return seq % MAX_NR_GENS;
-}
-
-static inline int lru_hist_from_seq(unsigned long seq)
-{
-	return seq % NR_HIST_GENS;
-}
-
-static inline int lru_tier_from_refs(int refs)
-{
-	VM_BUG_ON(refs > BIT(LRU_REFS_WIDTH));
-
-	/* see the comment on MAX_NR_TIERS */
-	return order_base_2(refs + 1);
 }
 
 static inline bool lru_gen_is_active(struct lruvec *lruvec, int gen)
@@ -183,15 +162,6 @@ static inline void lru_gen_update_size(struct lruvec *lruvec, struct page *page,
 		update_lru_size(lruvec, lru, zone, -delta);
 		return;
 	}
-
-	/* promotion */
-	if (!lru_gen_is_active(lruvec, old_gen) && lru_gen_is_active(lruvec, new_gen)) {
-		update_lru_size(lruvec, lru, zone, -delta);
-		update_lru_size(lruvec, lru + LRU_ACTIVE, zone, delta);
-	}
-
-	/* demotion requires isolation, e.g., lru_deactivate_fn() */
-	VM_BUG_ON(lru_gen_is_active(lruvec, old_gen) && !lru_gen_is_active(lruvec, new_gen));
 }
 
 static inline bool lru_gen_add_page(struct lruvec *lruvec, struct page *page, bool reclaiming)
@@ -202,7 +172,7 @@ static inline bool lru_gen_add_page(struct lruvec *lruvec, struct page *page, bo
 	int zone = page_zonenum(page);
 	struct lru_gen_struct *lrugen = &lruvec->lrugen;
 
-	if (PageUnevictable(page) || !lrugen->enabled)
+	if (PageUnevictable(page))
 		return false;
 	/*
 	 * There are three common cases for this page:
@@ -256,8 +226,6 @@ static inline bool lru_gen_del_page(struct lruvec *lruvec, struct page *page, bo
 		gen = ((new_flags & LRU_GEN_MASK) >> LRU_GEN_PGOFF) - 1;
 
 		new_flags &= ~LRU_GEN_MASK;
-		if (!(new_flags & BIT(PG_referenced)))
-			new_flags &= ~(LRU_REFS_MASK | LRU_REFS_FLAGS);
 		/* for shrink_page_list() */
 		if (reclaiming)
 			new_flags &= ~(BIT(PG_referenced) | BIT(PG_reclaim));
@@ -300,6 +268,9 @@ static __always_inline void add_page_to_lru_list(struct page *page,
 {
 	enum lru_list lru = page_lru(page);
 
+	if (lru_gen_add_page(lruvec, page, false))
+		return;
+
 	update_lru_size(lruvec, lru, page_zonenum(page), hpage_nr_pages(page));
 	list_add(&page->lru, &lruvec->lists[lru]);
 }
@@ -308,6 +279,9 @@ static __always_inline void add_page_to_lru_list_tail(struct page *page,
 				struct lruvec *lruvec)
 {
 	enum lru_list lru = page_lru(page);
+
+	if (lru_gen_add_page(lruvec, page, true))
+		return;
 
 	update_lru_size(lruvec, lru, page_zonenum(page), hpage_nr_pages(page));
 	list_add_tail(&page->lru, &lruvec->lists[lru]);
