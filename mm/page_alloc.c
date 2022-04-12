@@ -3101,7 +3101,7 @@ static void free_unref_page_commit(struct page *page, unsigned long pfn)
 	 * areas back if necessary. Otherwise, we may have to free
 	 * excessively into the page allocator
 	 */
-	if (migratetype >= MIGRATE_CMA) {
+	if (migratetype > MIGRATE_RECLAIMABLE) {
 		if (unlikely(is_migrate_isolate(migratetype))
 #ifdef CONFIG_MIGRATE_HIGHORDER
 				|| is_migrate_highorder(migratetype)
