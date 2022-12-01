@@ -368,6 +368,7 @@ static int tz_get_target_freq(struct devfreq *devfreq, unsigned long *freq)
 	int val, level = 0;
 	unsigned int scm_data[4];
 	int context_count = 0;
+	unsigned int refresh_rate = dsi_panel_get_refresh_rate();
 
 	/* keeps stats.private_data == NULL   */
 	result = devfreq_update_stats(devfreq);
@@ -378,6 +379,12 @@ static int tz_get_target_freq(struct devfreq *devfreq, unsigned long *freq)
 
 	*freq = stats->current_frequency;
 	priv->bin.total_time += stats->total_time;
+	if (refresh_rate > 60 && (unsigned int)(priv->bin.busy_time + stats->busy_time) >= FLOOR) {
+		/* inflate the busy_time by 10% */
+		priv->bin.busy_time += stats->busy_time *  11 / 10;
+	} else {
+		priv->bin.busy_time += stats->busy_time;
+	}
 	priv->bin.busy_time += stats->busy_time;
 
 	if (stats->private_data)
