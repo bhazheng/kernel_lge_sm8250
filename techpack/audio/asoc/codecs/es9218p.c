@@ -47,6 +47,10 @@
 
 #define     ES9218P_SYSFS 0              // use this feature only for user debug, not release
 
+#ifdef ES9218P_SYSFS
+static struct kobject *es9218_kernelobj;
+#endif
+
 //#define     USE_HPAHiQ                  // THD increased by ~2dB and Power Consumption increasded by ~2mA
 //#define   ES9218P_DEBUG               // ESS pop-click debugging, define to enable step by step override sequence debug messages and time delays.  Use to pinpoint pop-click.
 #define     WORKAROUND_FOR_CORNER_SAMPLES     // set ResetB high two times and send a cmd of soft reset
@@ -1339,6 +1343,49 @@ static int es9218p_sabre_amp_stop(struct i2c_client *client, int headset)
 }
 
 #ifdef ES9218P_SYSFS
+
+/* Left balance volume */
+static ssize_t set_forced_left_volume(struct device *dev,
+                   struct device_attribute *attr,
+                   const char *buf, size_t count) {
+    int input_val; // value representing dB decrease for left channel
+    sscanf(buf, "%d", &input_val);
+
+	/* NOTE: This value is halved internally, so there's no need to use float */
+	g_left_volume = input_val;
+
+    es9218_write_reg(g_es9218_priv->i2c_client, ES9218P_REG_15, g_left_volume);
+
+    return count;
+}
+static ssize_t get_forced_left_volume(struct device *dev,
+                   struct device_attribute *attr,
+                   char *buf) {
+    return sprintf(buf, "%i\n", g_left_volume);
+}
+static DEVICE_ATTR(left_volume, S_IWUSR|S_IRUGO, get_forced_left_volume, set_forced_left_volume);
+
+/* Right balance volume */
+static ssize_t set_forced_right_volume(struct device *dev,
+                   struct device_attribute *attr,
+                   const char *buf, size_t count) {
+    int input_val; // value representing dB decrease for left channel
+    sscanf(buf, "%d", &input_val);
+
+	/* NOTE: This value is halved internally, so there's no need to use float */
+	g_right_volume = input_val;
+
+    es9218_write_reg(g_es9218_priv->i2c_client, ES9218P_REG_16, g_right_volume);
+
+    return count;
+}
+static ssize_t get_forced_right_volume(struct device *dev,
+                   struct device_attribute *attr,
+                   char *buf) {
+    return sprintf(buf, "%i\n", g_right_volume);
+}
+static DEVICE_ATTR(right_volume, S_IWUSR|S_IRUGO, get_forced_right_volume, set_forced_right_volume);
+
 static int forced_headset_type = -1;
 
 static ssize_t set_forced_headset_type(struct device *dev,
@@ -1408,6 +1455,8 @@ static struct attribute *es9218_attrs[] = {
     &dev_attr_registers.attr,
     &dev_attr_headset_type.attr,
     // &dev_attr_avc_volume.attr,
+    &dev_attr_left_volume.attr,
+	&dev_attr_right_volume.attr,
     NULL
 };
 
