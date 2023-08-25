@@ -334,7 +334,6 @@ static int msm_audio_ion_buf_map(struct dma_buf *dma_buf, dma_addr_t *paddr,
 		mutex_lock(&(msm_audio_ion_data.list_mutex));
 		msm_audio_dma_buf_unmap(dma_buf);
 		mutex_unlock(&(msm_audio_ion_data.list_mutex));
-
 		goto err;
 	}
 
