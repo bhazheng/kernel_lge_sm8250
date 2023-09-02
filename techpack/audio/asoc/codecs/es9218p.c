@@ -1428,12 +1428,12 @@ static ssize_t set_forced_avc_volume(struct device *dev,
 
     if ( es9218_power_state < ESS_PS_HIFI ) {
         pr_err("%s() : invalid state = %s\n", __func__, power_state[es9218_power_state]);
-        return 0;
+        return -EINVAL;
     }
 
     if (input_vol >= sizeof(avc_vol_tbl)/sizeof(avc_vol_tbl[0])) {
         pr_err("%s() : Invalid vol = %d return \n", __func__, input_vol);
-        return 0;
+        return -EINVAL;
     }
 
     g_avc_volume = input_vol;
@@ -1461,12 +1461,12 @@ static ssize_t set_forced_ess_filter(struct device *dev,
 
     if ( es9218_power_state < ESS_PS_HIFI ) {
         pr_err("%s() : invalid state = %s\n", __func__, power_state[es9218_power_state]);
-        return 0;
+        return -EINVAL;
     }
 
     if (input_filter > 11) {
         pr_err("%s() : Invalid filter = %d return \n", __func__, input_filter);
-        return 0;
+        return -EINVAL;
     }
 
     g_sabre_cf_num = input_filter;
@@ -1484,6 +1484,119 @@ static ssize_t get_forced_ess_filter(struct device *dev,
 }
 static DEVICE_ATTR(ess_filter, S_IWUSR|S_IRUGO, get_forced_ess_filter, set_forced_ess_filter);
 
+/* Custom ESS Filter (filter [3] has to be selected) */
+#define MAX_FILTER_DATA_SIZE     16 /* shape, symmetry, followed by 14 stage 2 coefficients */
+/* 
+ * Let's try not to waste much space with string size here: 
+ * size = 2 (char space used by shape and symmetry) +
+ * 10 * 14 (all usable stage 2 coefficients, each can use a max of 8 chars) +
+ * MAX_FILTER_DATA_SIZE (amount of commas needed) +
+ * 1 ('\0' char)
+ */
+#define MAX_FILTER_STRING_SIZE   2 + (8 * 14) + MAX_FILTER_DATA_SIZE + 1
+static ssize_t set_forced_ess_custom_filter(struct device *dev,
+                   struct device_attribute *attr,
+                   const char *buf, size_t count) {
+	char *datatoken, *delimiter = ",";
+	char *received_data = kzalloc(MAX_FILTER_STRING_SIZE * sizeof(char), GFP_KERNEL);
+	int filter_data[MAX_FILTER_DATA_SIZE], i = 0;
+
+
+	sscanf(buf, "%s", received_data);
+
+	if ( es9218_power_state < ESS_PS_HIFI ) {
+		pr_err("%s() : invalid state = %s\n", __func__, power_state[es9218_power_state]);
+		return -EINVAL;
+	}
+
+	/* Tokenize received data and save into the filter data array (everything is an integer) */
+	while ((datatoken = strsep(&received_data, delimiter)) != NULL && i < MAX_FILTER_DATA_SIZE) {
+		if (kstrtoint(datatoken, 10, &filter_data[i]) != 0) {
+			pr_err("Failed to convert filter data!");
+			return -EINVAL;
+		}
+		i++;
+	}
+
+	/* Load the received data into the custom filter */
+	if(filter_data[0] >= 0 && filter_data[0] !=  5 && filter_data[0] <= 7) /* Load filter shape config */
+		es9218_sabre_custom_ft[g_sabre_cf_num].shape    = filter_data[0];
+	if(filter_data[1] == 0 || filter_data[1] == 1) /* Copy filter symmetry config */
+		es9218_sabre_custom_ft[g_sabre_cf_num].symmetry = filter_data[1];
+	for(i = 0; i < 14; i++) {
+			/* 
+			 * Load stage 2 coefficients, totaling 14 data points. The last two datapoints are 
+			 * always zero according to ES9218/P's Official Datasheet.
+			 */
+		if(filter_data[i+2] <= 9999999 && filter_data[i+2] >= -9999999)
+			es9218_sabre_custom_ft[g_sabre_cf_num].stage2_coeff[i] = filter_data[i+2];
+	}
+		/* 
+		 * Stage 1 coefficients aren't needed... stage 2 seems to override them or at least
+		 * significantly impact the results from stage 1, and i really doubt it's
+		 * even possible to translate 128 data points into a UI that's both accurate and
+		 * user-friendly. That's why stage 1 isn't read from, nor written to.
+		 *
+		 * This also reduces ESS's sysfs memory usage by quite a bit, and makes sysfs calls
+		 * that read or write to the custom filter a bit faster as well.
+		 */
+
+	/* Apply the custom filter */
+	es9218_sabre_cfg_custom_filter(&es9218_sabre_custom_ft[g_sabre_cf_num]);
+
+	/* We already used up the received data, so free all previously allocated space. */
+	kfree(received_data);
+
+	return count;
+}
+static ssize_t get_forced_ess_custom_filter(struct device *dev,
+                   struct device_attribute *attr,
+                   char *buf) {
+	char send_data[MAX_FILTER_STRING_SIZE];
+	char tempbuf[10]; /* There will never be an element on the filter data that takes more than 9 chars */
+	int i,j, written = 0;
+
+	memset(send_data, 0, sizeof(send_data));
+
+		/* 
+		 * NOTE: Here we don't need to have the "correct" filter selected on the panel,
+		 * we're just reading data from the custom filter which is always 'es9218_sabre_custom_ft[3]'
+		 */
+
+	for (i = 0; i < MAX_FILTER_DATA_SIZE; i++){
+		/* Copy filter shape config */
+		memset(tempbuf, 0, sizeof(tempbuf));
+		if(i == 0)
+			sprintf(tempbuf, "%d", (int) es9218_sabre_custom_ft[3].shape);
+		/* Copy filter symmetry config */
+		else if (i == 1)
+			sprintf(tempbuf, "%d", (int) es9218_sabre_custom_ft[3].symmetry);
+		/* Copy stage 2 coefficients */
+		else if (i >= 2 && i < 16)
+			sprintf(tempbuf, "%d", es9218_sabre_custom_ft[3].stage2_coeff[i-2]);
+		/* Copy stage 1 coefficients (NOT USED) */
+		//else if (i >= 16 && i < 144)
+		//	sprintf(tempbuf, "%d", es9218_sabre_custom_ft[3].stage1_coeff[i-16]);
+
+		for(j = 0; j < 10; j++)
+		{
+			if(tempbuf[j] == '\0') 
+				break;
+
+			send_data[written] = tempbuf[j];
+			written++;
+		}
+
+		/* Add a comma after each element, except for the last element on the filter's data struct */
+		if (i < MAX_FILTER_DATA_SIZE - 1) {
+			send_data[written] = ',';
+			written++;
+		}
+	}
+
+	return sprintf(buf, "%s\n", send_data);
+}
+static DEVICE_ATTR(ess_custom_filter, S_IWUSR|S_IRUGO, get_forced_ess_custom_filter, set_forced_ess_custom_filter);
 
 static struct attribute *es9218_attrs[] = {
 #ifdef CONFIG_SND_SOC_LGE_ESS_DIGITAL_FILTER
@@ -1496,6 +1609,7 @@ static struct attribute *es9218_attrs[] = {
     // &dev_attr_avc_volume.attr,
     &dev_attr_left_volume.attr,
 	&dev_attr_right_volume.attr,
+    &dev_attr_ess_custom_filter.attr,
     NULL
 };
 
