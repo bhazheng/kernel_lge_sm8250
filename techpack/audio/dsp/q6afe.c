@@ -1231,6 +1231,16 @@ static int32_t afe_callback(struct apr_client_data *data, void *priv)
 			wake_up(&this_afe.wait[data->token]);
 		else
 			return -EINVAL;
+/* for mius start */
+#ifdef CONFIG_US_PROXIMITY
+	} else if (data->opcode == MI_ULTRASOUND_OPCODE) {
+		if (NULL != data->payload) {
+			pr_debug("[MIUS] mi ultrasound afe afe cb");
+			mius_process_apr_payload(data->payload);
+		} else
+			pr_err("[EXPORT_SYMBOLLUS]: payload ptr is Invalid");
+#endif
+/* for mius end */
 	} else if (data->opcode == AFE_EVENT_MBHC_DETECTION_SW_WA) {
 		msm_aud_evt_notifier_call_chain(SWR_WAKE_IRQ_EVENT, NULL);
 	} else if (data->opcode ==
