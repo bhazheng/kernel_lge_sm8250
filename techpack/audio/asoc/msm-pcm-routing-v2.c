@@ -1320,22 +1320,216 @@
 			 topology = NULL_COPP_TOPOLOGY;
 	 }
 
-	 pr_debug("%s: Using topology %d\n", __func__, topology);
-	 return topology;
- }
- 
- static uint8_t is_be_dai_extproc(int be_dai)
- {
-	 if (be_dai == MSM_BACKEND_DAI_EXTPROC_RX ||
-		be_dai == MSM_BACKEND_DAI_EXTPROC_TX ||
-		be_dai == MSM_BACKEND_DAI_EXTPROC_EC_TX)
-		 return 1;
-	 else
-		 return 0;
- }
- 
- static void msm_pcm_routing_build_matrix(int fedai_id, int sess_type,
-					  int path_type, int perf_mode,
+static int msm_routing_find_topology_on_index(int session_type, int app_type,
+					      int acdb_dev_id,  int idx,
+					      bool exact)
+{
+	int topology = -EINVAL;
+	struct cal_block_data *cal_block = NULL;
+
+	mutex_lock(&cal_data[idx]->lock);
+	cal_block = msm_routing_find_topology(session_type, app_type,
+					      acdb_dev_id, idx, exact);
+	if (cal_block != NULL) {
+		topology = ((struct audio_cal_info_adm_top *)
+			    cal_block->cal_info)->topology;
+	}
+	mutex_unlock(&cal_data[idx]->lock);
+	return topology;
+}
+
+/*
+ * Retrieving cal_block will mark cal_block as stale.
+ * Hence it cannot be reused or resent unless the flag
+ * is reset.
+ */
+static int msm_routing_get_adm_topology(int fedai_id, int session_type,
+					int be_id)
+{
+	int topology = NULL_COPP_TOPOLOGY;
+	int app_type = 0, acdb_dev_id = 0;
+	bool is_afe_proxy;
+	is_afe_proxy = (be_id == MSM_BACKEND_DAI_AFE_PCM_RX);
+
+	pr_debug("%s: fedai_id %d, session_type %d, be_id %d\n",
+	       __func__, fedai_id, session_type, be_id);
+
+	app_type = fe_dai_app_type_cfg[fedai_id][session_type][be_id].app_type;
+	acdb_dev_id =
+		fe_dai_app_type_cfg[fedai_id][session_type][be_id].acdb_dev_id;
+
+	pr_debug("%s: Check for exact LSM topology\n", __func__);
+	topology = msm_routing_find_topology_on_index(session_type,
+					       app_type,
+					       acdb_dev_id,
+					       ADM_LSM_TOPOLOGY_CAL_TYPE_IDX,
+					       true /*exact*/);
+	if (topology < 0) {
+		pr_debug("%s: Check for compatible topology, exact %d\n", __func__, is_afe_proxy);
+		topology = msm_routing_find_topology_on_index(session_type,
+						      app_type,
+						      acdb_dev_id,
+						      ADM_TOPOLOGY_CAL_TYPE_IDX,
+						      is_afe_proxy /*exact*/);
+		if (topology < 0)
+			topology = NULL_COPP_TOPOLOGY;
+	}
+	pr_debug("%s: Using topology %d\n", __func__, topology);
+	return topology;
+}
+
+static uint8_t is_be_dai_extproc(int be_dai)
+{
+	if (be_dai == MSM_BACKEND_DAI_EXTPROC_RX ||
+	   be_dai == MSM_BACKEND_DAI_EXTPROC_TX ||
+	   be_dai == MSM_BACKEND_DAI_EXTPROC_EC_TX)
+		return 1;
+	else
+		return 0;
+}
+
+static void msm_pcm_routing_build_matrix(int fedai_id, int sess_type,
+					 int path_type, int perf_mode,
+					 uint32_t passthr_mode)
+{
+	int i, port_type, j, num_copps = 0;
+	struct route_payload payload;
+
+	port_type = ((path_type == ADM_PATH_PLAYBACK ||
+		      path_type == ADM_PATH_COMPRESSED_RX) ?
+		MSM_AFE_PORT_TYPE_RX : MSM_AFE_PORT_TYPE_TX);
+
+	for (i = 0; i < MSM_BACKEND_DAI_MAX; i++) {
+		if (!is_be_dai_extproc(i) &&
+		   (afe_get_port_type(msm_bedais[i].port_id) == port_type) &&
+		   (msm_bedais[i].active) &&
+		   (test_bit(fedai_id, &msm_bedais[i].fe_sessions[0]))) {
+			int port_id = get_port_id(msm_bedais[i].port_id);
+			for (j = 0; j < MAX_COPPS_PER_PORT; j++) {
+				unsigned long copp =
+				      session_copp_map[fedai_id][sess_type][i];
+				if (test_bit(j, &copp)) {
+					payload.port_id[num_copps] = port_id;
+					payload.copp_idx[num_copps] = j;
+					payload.app_type[num_copps] =
+						fe_dai_app_type_cfg
+							[fedai_id][sess_type][i]
+								.app_type;
+					payload.acdb_dev_id[num_copps] =
+						fe_dai_app_type_cfg
+							[fedai_id][sess_type][i]
+								.acdb_dev_id;
+					payload.sample_rate[num_copps] =
+						fe_dai_app_type_cfg
+							[fedai_id][sess_type][i]
+								.sample_rate;
+					num_copps++;
+				}
+			}
+		}
+	}
+
+	if (num_copps) {
+		payload.num_copps = num_copps;
+		payload.session_id = fe_dai_map[fedai_id][sess_type].strm_id;
+		adm_matrix_map(path_type, payload, perf_mode, passthr_mode);
+		msm_pcm_routng_cfg_matrix_map_pp(payload, path_type, perf_mode);
+	}
+}
+
+void msm_pcm_routing_reg_psthr_stream(int fedai_id, int dspst_id,
+				      int stream_type)
+{
+	int i, session_type, path_type, port_type;
+	u32 mode = 0;
+
+	if (fedai_id > MSM_FRONTEND_DAI_MM_MAX_ID) {
+		/* bad ID assigned in machine driver */
+		pr_err("%s: bad MM ID\n", __func__);
+		return;
+	}
+
+	if (stream_type == SNDRV_PCM_STREAM_PLAYBACK) {
+		session_type = SESSION_TYPE_RX;
+		path_type = ADM_PATH_PLAYBACK;
+		port_type = MSM_AFE_PORT_TYPE_RX;
+	} else {
+		session_type = SESSION_TYPE_TX;
+		path_type = ADM_PATH_LIVE_REC;
+		port_type = MSM_AFE_PORT_TYPE_TX;
+	}
+
+	mutex_lock(&routing_lock);
+
+	fe_dai_map[fedai_id][session_type].strm_id = dspst_id;
+	for (i = 0; i < MSM_BACKEND_DAI_MAX; i++) {
+		if (!is_be_dai_extproc(i) &&
+		    (afe_get_port_type(msm_bedais[i].port_id) == port_type) &&
+		    (msm_bedais[i].active) &&
+		    (test_bit(fedai_id, &msm_bedais[i].fe_sessions[0]))) {
+			mode = afe_get_port_type(msm_bedais[i].port_id);
+			adm_connect_afe_port(mode, dspst_id,
+					     msm_bedais[i].port_id);
+			break;
+		}
+	}
+	mutex_unlock(&routing_lock);
+}
+
+static bool route_check_fe_id_adm_support(int fe_id)
+{
+	bool rc = true;
+
+	if ((fe_id >= MSM_FRONTEND_DAI_LSM1) &&
+		 (fe_id <= MSM_FRONTEND_DAI_LSM8)) {
+		/* fe id is listen while port is set to afe */
+		if (lsm_port_index[fe_id - MSM_FRONTEND_DAI_LSM1] !=
+				ADM_LSM_PORT_INDEX) {
+			pr_debug("%s: fe_id %d, lsm mux slim port %d\n",
+				__func__, fe_id,
+				lsm_port_index[fe_id - MSM_FRONTEND_DAI_LSM1]);
+			rc = false;
+		}
+	}
+
+	return rc;
+}
+
+/*
+ * msm_pcm_routing_get_pp_ch_cnt:
+ *	Read the processed channel count
+ *
+ * @fe_id: Front end ID
+ * @session_type: Inidicates RX or TX session type
+ */
+int msm_pcm_routing_get_pp_ch_cnt(int fe_id, int session_type)
+{
+	struct msm_pcm_stream_app_type_cfg cfg_data;
+	int be_id = 0, app_type_idx = 0, app_type = 0;
+	int ret = -EINVAL;
+
+	memset(&cfg_data, 0, sizeof(cfg_data));
+
+	if (!is_mm_lsm_fe_id(fe_id)) {
+		pr_err("%s: bad MM ID\n", __func__);
+		return -EINVAL;
+	}
+
+	ret = msm_pcm_routing_get_stream_app_type_cfg(fe_id, session_type,
+						      &be_id, &cfg_data);
+	if (ret) {
+		pr_err("%s: cannot get stream app type cfg\n", __func__);
+		return ret;
+	}
+
+	app_type = cfg_data.app_type;
+	app_type_idx = msm_pcm_routing_get_lsm_app_type_idx(app_type);
+	return lsm_app_type_cfg[app_type_idx].num_out_channels;
+}
+EXPORT_SYMBOL(msm_pcm_routing_get_pp_ch_cnt);
+
+int msm_pcm_routing_reg_phy_compr_stream(int fe_id, int perf_mode,
+					  int dspst_id, int stream_type,
 					  uint32_t passthr_mode)
  {
 	 int i, port_type, j, num_copps = 0;

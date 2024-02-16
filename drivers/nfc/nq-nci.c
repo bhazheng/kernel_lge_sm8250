@@ -106,6 +106,37 @@ static struct notifier_block nfcc_notifier = {
 
 unsigned int	disable_ctrl;
 
+#define MAX_I2C_DUMP_SIZE 512
+#ifdef DISABLE_NCI_DEBUG
+static void print_send_buffer(struct nqx_dev *nqx_dev, unsigned char *buf, int len)
+{
+	unsigned char output[MAX_I2C_DUMP_SIZE * 2 + 1];
+	int i;
+
+	if (len > MAX_I2C_DUMP_SIZE)
+		len = MAX_I2C_DUMP_SIZE - 1;
+
+	for (i = 0; i < len; i++)
+		snprintf(output + i * 2, 5, "%02x ", buf[i]);
+
+	dev_warn(&nqx_dev->client->dev, "%3d > %s\n", len, output);
+}
+
+static void print_recv_buffer(struct nqx_dev *nqx_dev, unsigned char *buf, int len)
+{
+	unsigned char output[MAX_I2C_DUMP_SIZE * 2 + 1];
+	int i;
+
+	if (len > MAX_I2C_DUMP_SIZE)
+		len = MAX_I2C_DUMP_SIZE - 1;
+
+	for (i = 0; i < len; i++)
+		snprintf(output + i * 2, 5, "%02x ", buf[i]);
+
+	dev_warn(&nqx_dev->client->dev, "%3d < %s\n", len, output);
+}
+#endif
+
 static void nqx_init_stat(struct nqx_dev *nqx_dev)
 {
 	nqx_dev->count_irq = 0;

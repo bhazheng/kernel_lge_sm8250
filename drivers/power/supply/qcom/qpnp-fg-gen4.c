@@ -1000,6 +1000,11 @@ static int fg_gen4_get_prop_capacity(struct fg_dev *fg, int *val)
 	struct fg_gen4_chip *chip = container_of(fg, struct fg_gen4_chip, fg);
 	int rc, msoc = 0;
 
+	if (!chip->dt.shutdown_delay_enable) {
+		*val = 1;
+		return 0;
+	}
+
 	if (is_debug_batt_id(fg)) {
 		*val = DEBUG_BATT_SOC;
 		return 0;
@@ -3060,7 +3065,8 @@ static int fg_gen4_charge_full_update(struct fg_dev *fg)
 		msoc, bsoc, fg->health, fg->charge_status,
 		fg->charge_full);
 	if (fg->charge_done && !fg->charge_full) {
-		if (msoc >= 99 && fg->health == POWER_SUPPLY_HEALTH_GOOD) {
+		if (msoc >= 99 && (fg->health != POWER_SUPPLY_HEALTH_WARM &&
+					fg->health != POWER_SUPPLY_HEALTH_OVERHEAT)) {
 			fg_dbg(fg, FG_STATUS, "Setting charge_full to true\n");
 			fg->charge_full = true;
 		} else {
@@ -4561,6 +4567,108 @@ static struct attribute *fg_attrs[] = {
 	NULL,
 };
 ATTRIBUTE_GROUPS(fg);
+
+static int fg_gen4_set_vbatt_full_vol(struct fg_dev *fg, bool enable_ffc)
+{
+	int rc = 0;
+	int volt;
+
+	if (enable_ffc)
+		volt = fg->bp.ffc_vbatt_full_mv;
+	else
+		volt = fg->bp.vbatt_full_mv;
+
+	if (volt < 0)
+		return rc;
+
+	rc = fg_set_constant_chg_voltage(fg, volt * 1000);
+	if (rc < 0) {
+		pr_err("Error in constant chg vol rc=%d\n", rc);
+		return rc;
+	}
+	fg->bp.float_volt_uv = volt * 1000 + 10000;
+	fg_dbg(fg, FG_STATUS, "set cc-cv volt:%d float_volt_uv:%d\n", volt, fg->bp.float_volt_uv);
+
+	return rc;
+}
+
+static int fg_gen4_set_sys_termi_curr(struct fg_dev *fg, bool enable_ffc)
+{
+	struct fg_gen4_chip *chip = container_of(fg, struct fg_gen4_chip, fg);
+	u8 buf[4];
+	int rc;
+	int curr;
+
+	if (enable_ffc)
+		curr = chip->dt.ffc_sys_term_curr_ma;
+	else
+		curr = chip->dt.sys_term_curr_ma;
+
+	if (chip->dt.ffc_sys_term_curr_ma == -EINVAL)
+		return 0;
+
+	fg_encode(fg->sp, FG_SRAM_SYS_TERM_CURR, curr, buf);
+	rc = fg_sram_write(fg, fg->sp[FG_SRAM_SYS_TERM_CURR].addr_word,
+			fg->sp[FG_SRAM_SYS_TERM_CURR].addr_byte, buf,
+			fg->sp[FG_SRAM_SYS_TERM_CURR].len, FG_IMA_DEFAULT);
+	if (rc < 0) {
+		pr_err("Error in writing sys_term_curr, rc=%d\n", rc);
+		return rc;
+	}
+	fg_dbg(fg, FG_STATUS, "set sys termi curr:%d\n", curr);
+
+	return rc;
+}
+
+static int fg_gen4_set_ki_coeff_curr(struct fg_dev *fg, bool enable_ffc)
+{
+	struct fg_gen4_chip *chip = container_of(fg, struct fg_gen4_chip, fg);
+	u8 val;
+	int rc;
+	int lo_med_curr, med_hi_curr;
+
+	if (enable_ffc) {
+		lo_med_curr = chip->dt.ffc_ki_coeff_lo_med_chg_thr_ma;
+		med_hi_curr = chip->dt.ffc_ki_coeff_med_hi_chg_thr_ma;
+	} else {
+		lo_med_curr = chip->dt.ki_coeff_lo_med_chg_thr_ma;
+		med_hi_curr = chip->dt.ki_coeff_med_hi_chg_thr_ma;
+	}
+	pr_err("enable_ffc:%d, low_med_curr:%d, med_hi_curr:%d\n", enable_ffc, lo_med_curr, med_hi_curr);
+
+	if (lo_med_curr == -EINVAL || med_hi_curr == -EINVAL)
+		return 0;
+
+	fg_encode(fg->sp, FG_SRAM_KI_COEFF_LO_MED_CHG_THR,
+			lo_med_curr, &val);
+	rc = fg_sram_write(fg,
+			fg->sp[FG_SRAM_KI_COEFF_LO_MED_CHG_THR].addr_word,
+			fg->sp[FG_SRAM_KI_COEFF_LO_MED_CHG_THR].addr_byte,
+			&val, fg->sp[FG_SRAM_KI_COEFF_LO_MED_CHG_THR].len,
+			FG_IMA_DEFAULT);
+	if (rc < 0) {
+		pr_err("Error in writing ki_coeff_lo_med_chg_thr_ma, rc=%d\n",
+				rc);
+		return rc;
+	}
+
+	fg_encode(fg->sp, FG_SRAM_KI_COEFF_MED_HI_CHG_THR,
+			med_hi_curr, &val);
+	rc = fg_sram_write(fg,
+			fg->sp[FG_SRAM_KI_COEFF_MED_HI_CHG_THR].addr_word,
+			fg->sp[FG_SRAM_KI_COEFF_MED_HI_CHG_THR].addr_byte, &val,
+			fg->sp[FG_SRAM_KI_COEFF_MED_HI_CHG_THR].len,
+			FG_IMA_DEFAULT);
+	if (rc < 0) {
+		pr_err("Error in writing ki_coeff_med_hi_chg_thr_ma, rc=%d\n",
+				rc);
+		return rc;
+	}
+	pr_err("==test lo_med_curr:%d, med_hi_curr:%d\n", lo_med_curr, med_hi_curr);
+
+	return rc;
+}
+
 
 /* All power supply functions here */
 

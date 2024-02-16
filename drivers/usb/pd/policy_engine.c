@@ -6394,7 +6394,7 @@ static ssize_t select_pdo_store(struct device *dev,
 	struct usbpd *pd = dev_get_drvdata(dev);
 	int src_cap_id;
 	int pdo, uv = 0, ua = 0;
-	int ret;
+	int ret = 0;
 
 #ifdef CONFIG_LGE_USB
 	usbpd_dbg(&pd->dev, "%s\n", __func__);
@@ -6893,6 +6893,506 @@ struct usbpd *devm_usbpd_get_by_phandle(struct device *dev, const char *phandle)
 	return pd;
 }
 EXPORT_SYMBOL(devm_usbpd_get_by_phandle);
+
+static void usbpd_mi_connect_cb(struct usbpd_svid_handler *hdlr,bool supports_usb_comm)
+{
+	struct usbpd *pd;
+
+	pd = container_of(hdlr, struct usbpd, svid_handler);
+
+	pd->uvdm_state = USBPD_UVDM_CONNECT;
+	usbpd_info(&pd->dev, "hdlr->svid:%x has connect\n", hdlr->svid);
+	return;
+}
+
+static void usbpd_mi_disconnect_cb(struct usbpd_svid_handler *hdlr)
+{
+	struct usbpd *pd;
+
+	pd = container_of(hdlr, struct usbpd, svid_handler);
+
+	pd->adapter_id = 0;
+	pd->adapter_svid = 0;
+	pd->vdm_data.ta_version = 0;
+	pd->uvdm_state = USBPD_UVDM_DISCONNECT;
+	pd->verify_process = 0;
+	usbpd_info(&pd->dev, "hdlr->svid:%x has disconnect\n", hdlr->svid);
+	kobject_uevent(&pd->dev.kobj, KOBJ_CHANGE);
+	cancel_delayed_work(&pd->src_check_work);
+
+	return;
+}
+static void usbpd_mi_vdm_received_cb(struct usbpd_svid_handler *hdlr, u32 vdm_hdr,
+		const u32 *vdos, int num_vdos)
+{
+	struct usbpd *pd;
+	int i, cmd;
+	int usb_current, usb_voltage, r_cable;
+	union power_supply_propval val = {0};
+	int ret;
+
+	pd = container_of(hdlr, struct usbpd, svid_handler);
+	cmd = UVDM_HDR_CMD(vdm_hdr);
+
+	usbpd_dbg(&pd->dev, "hdlr->svid:0x%x, vdm_hdr:0x%x, num_vdos:%d, cmd:%d\n",
+			hdlr->svid, vdm_hdr, num_vdos);
+
+	switch (cmd) {
+	case USBPD_UVDM_CHARGER_VERSION:
+		pd->vdm_data.ta_version = vdos[0];
+		usbpd_dbg(&pd->dev, "ta_version:%x\n", pd->vdm_data.ta_version);
+		break;
+	case USBPD_UVDM_CHARGER_TEMP:
+		pd->vdm_data.ta_temp = (vdos[0] & 0xFFFF) * 10;
+		usbpd_dbg(&pd->dev, "pd->vdm_data.ta_temp:%d\n", pd->vdm_data.ta_temp);
+		break;
+	case USBPD_UVDM_CHARGER_VOLTAGE:
+		pd->vdm_data.ta_voltage = (vdos[0] & 0xFFFF) * 10;
+		pd->vdm_data.ta_voltage *= 1000; /*V->mV*/
+		usbpd_dbg(&pd->dev, "ta_voltage:%d\n", pd->vdm_data.ta_voltage);
+
+		ret = power_supply_get_property(pd->usb_psy,
+			POWER_SUPPLY_PROP_VOLTAGE_NOW, &val);
+		if (ret) {
+			usbpd_err(&pd->dev, "failed to get usb voltage now\n");
+			break;
+		}
+		usb_voltage = val.intval;
+		usbpd_dbg(&pd->dev, "usb voltage now:%d\n", usb_voltage);
+		ret = power_supply_get_property(pd->usb_psy,
+			POWER_SUPPLY_PROP_INPUT_CURRENT_NOW, &val);
+		if (ret) {
+			usbpd_err(&pd->dev, "failed to get usb current now\n");
+			break;
+		}
+		usb_current = val.intval / 1000;
+		usbpd_dbg(&pd->dev, "usb current now:%d\n", usb_current);
+
+		r_cable = (pd->vdm_data.ta_voltage - usb_voltage) / usb_current;
+		usbpd_dbg(&pd->dev, "usb r_cable now:%dmohm\n", r_cable);
+		break;
+	case USBPD_UVDM_SESSION_SEED:
+		for (i = 0; i < num_vdos; i++) {
+			pd->vdm_data.s_secert[i] = vdos[i];
+			usbpd_dbg(&pd->dev, "usbpd s_secert vdos[%d]=0x%x", i, vdos[i]);
+		}
+		break;
+	case USBPD_UVDM_AUTHENTICATION:
+		for (i = 0; i < num_vdos; i++) {
+			pd->vdm_data.digest[i] = vdos[i];
+			usbpd_dbg(&pd->dev, "usbpd digest[%d]=0x%x", i, vdos[i]);
+		}
+		break;
+	case USBPD_UVDM_REVERSE_AUTHEN:
+		pd->vdm_data.reauth = (vdos[0] & 0xFFFF);
+		break;
+	default:
+		break;
+	}
+	pd->uvdm_state = cmd;
+}
+
+int usbpd_get_pps_status(struct usbpd *pd, u32 *pps_status)
+{
+	int ret;
+
+	if (pd->spec_rev == USBPD_REV_20)
+		return -EINVAL;
+
+	ret = trigger_tx_msg(pd, &pd->send_get_pps_status);
+	if (ret)
+		return ret;
+
+	*pps_status = pd->pps_status_db;
+
+	return ret;
+}
+EXPORT_SYMBOL(usbpd_get_pps_status);
+
+int usbpd_fetch_pdo(struct usbpd *pd, struct usbpd_pdo *pdos)
+{
+	int ret = 0;
+	int pdo;
+	int i;
+
+	if (!pd || !pdos)
+		return -EINVAL;
+
+	mutex_lock(&pd->swap_lock);
+
+	pd->request_reject = 0;
+	usbpd_err(&pd->dev, "set request_reject as 0\n");
+
+	if (pd->current_pr == PR_SRC) {
+		usbpd_err(&pd->dev, "not support in SRC mode\n");
+		ret = -ENOTSUPP;
+		goto out;
+	}
+
+	for (i = 0; i < 7; i++) {
+		pdo = pd->received_pdos[i];
+		if (pdo == 0)
+			break;
+
+		pdos[i].pos = i + 1;
+		pdos[i].pps = PD_APDO_PPS(pdo) == 0;
+		pdos[i].type = PD_SRC_PDO_TYPE(pdo);
+
+		if (pdos[i].type == PD_SRC_PDO_TYPE_FIXED) {
+			pdos[i].curr_ma = PD_SRC_PDO_FIXED_MAX_CURR(pdo) * 10;
+			pdos[i].max_volt_mv = PD_SRC_PDO_FIXED_VOLTAGE(pdo) * 50;
+			pdos[i].min_volt_mv = PD_SRC_PDO_FIXED_VOLTAGE(pdo) * 50;
+			usbpd_info(&pd->dev,
+					"pdo:%d, Fixed supply, volt:%d(mv), max curr:%d\n",
+					i+1, pdos[i].max_volt_mv,
+					pdos[i].curr_ma);
+		} else if (pdos[i].type == PD_SRC_PDO_TYPE_AUGMENTED) {
+			pdos[i].max_volt_mv = PD_APDO_MAX_VOLT(pdo) * 100;
+			pdos[i].min_volt_mv = PD_APDO_MIN_VOLT(pdo) * 100;
+			pdos[i].curr_ma     = PD_APDO_MAX_CURR(pdo) * 50;
+			usbpd_info(&pd->dev,
+					"pdo:%d, PPS, volt: %d(mv), max curr:%d\n",
+					i+1, pdos[i].max_volt_mv,
+					pdos[i].curr_ma);
+		} else {
+			usbpd_err(&pd->dev, "only fixed and pps pdo supported\n");
+		}
+	}
+
+out:
+	mutex_unlock(&pd->swap_lock);
+	return ret;
+}
+EXPORT_SYMBOL(usbpd_fetch_pdo);
+
+int usbpd_select_pdo(struct usbpd *pd, int pdo, int uv, int ua)
+{
+	int ret = 0;
+
+	mutex_lock(&pd->swap_lock);
+
+	if (pd->verify_process)
+		goto out;
+
+	if (pd->current_pr != PR_SINK) {
+		ret = -ENOTSUPP;
+		goto out;
+	}
+
+	/* Only allowed if we are already in explicit sink contract */
+	if (pd->current_state != PE_SNK_READY || !is_sink_tx_ok(pd)) {
+		usbpd_err(&pd->dev, "select_pdo: Cannot select new PDO yet\n");
+		ret = -EBUSY;
+		goto out;
+	}
+
+	if (pdo < 1 || pdo > 7) {
+		usbpd_err(&pd->dev, "select_pdo: invalid PDO:%d\n", pdo);
+		ret = -EINVAL;
+		goto out;
+	}
+
+	if (pdo == pd->last_pdo && uv == pd->last_uv
+			&& ua == pd->last_ua && !pd->force_update) {
+		goto out;
+	} else {
+		pd->force_update = false;
+		cancel_delayed_work(&pd->src_check_work);
+		schedule_delayed_work(&pd->src_check_work, 5 * HZ);
+	}
+
+	ret = pd_select_pdo_for_bq(pd, pdo, uv, ua);
+	if (ret)
+		goto out;
+
+	reinit_completion(&pd->is_ready);
+	pd->send_request = true;
+	kick_sm(pd, 0);
+
+	/* wait for operation to complete */
+	if (!wait_for_completion_timeout(&pd->is_ready,
+			msecs_to_jiffies(1000))) {
+		usbpd_err(&pd->dev, "select_pdo: request timed out\n");
+		ret = -ETIMEDOUT;
+		goto out;
+	}
+
+	/* determine if request was accepted/rejected */
+	if (pd->selected_pdo != pd->requested_pdo ||
+			pd->current_voltage != pd->requested_voltage) {
+		usbpd_err(&pd->dev, "select_pdo: request rejected\n");
+		ret = -EINVAL;
+	}
+
+out:
+	pd->send_request = false;
+	pd->last_pdo = pdo;
+	pd->last_uv = uv;
+	pd->last_ua = ua;
+	mutex_unlock(&pd->swap_lock);
+	return ret;
+}
+EXPORT_SYMBOL(usbpd_select_pdo);
+
+int usbpd_get_current_state(struct usbpd *pd){
+	int ret = 0;
+
+	ret = pd->request_reject;
+	return ret;
+}
+EXPORT_SYMBOL(usbpd_get_current_state);
+
+static void source_check_workfunc(struct work_struct *w)
+{
+	struct usbpd *pd = container_of(w, struct usbpd, src_check_work.work);
+
+	pd->force_update = true;
+	usbpd_select_pdo(pd, pd->last_pdo, pd->last_uv, pd->last_ua);
+}
+
+#define PPS_DANGEROUS_LOOP_TIME		200
+#define PPS_MONITOR_LOOP_TIME		5000
+#define DIV2_MODE_MIN_VBUS		15000000
+#define PASSTHROUHG_MODE_MAX_VBUS	10000000
+#define ISNS_MARGIN_CURRENT		1000
+#define PPS_DANGEROUS_CHECK_TIME	3
+#define PPS_MONITOR_INSERT_LOOP_US	30000000       /* 30sec */
+
+
+static void usbpd_pps_monitor_workfunc(struct work_struct *w)
+{
+	struct usbpd *pd = container_of(w, struct usbpd, pps_monitor_work.work);
+	union power_supply_propval val = {0};
+	int rc, isns = 0, interval;
+	bool cp_dis, passthrough_dis;
+	static int check;
+	u64 elapsed_us;
+
+	pd->cp_psy = power_supply_get_by_name("charge_pump_master");
+	if (!pd->cp_psy) {
+		usbpd_dbg(&pd->dev, "Could not get cp psy\n");
+		return;
+	}
+
+	cp_dis = get_effective_result(pd->cp_disable_votable);
+	passthrough_dis = get_effective_result(pd->passthrough_dis_votable);
+
+	if (cp_dis && passthrough_dis) {
+		check = 0;
+		interval = PPS_MONITOR_LOOP_TIME;
+		goto end;
+	}
+	rc = power_supply_get_property(pd->cp_psy,
+				POWER_SUPPLY_PROP_CP_ISNS, &val);
+	if (!rc) {
+		isns = val.intval / 1000;
+	}
+
+	rc = power_supply_get_property(pd->cp_psy,
+				POWER_SUPPLY_PROP_CP_ISNS_SLAVE, &val);
+	if (!rc) {
+		isns += val.intval / 1000;
+	}
+
+	if (!passthrough_dis) {
+		if ((isns > pd->requested_current + ISNS_MARGIN_CURRENT) &&
+				(pd->requested_voltage < PASSTHROUHG_MODE_MAX_VBUS)) {
+			check++;
+			if (check >= PPS_DANGEROUS_CHECK_TIME) {
+				vote(pd->cp_disable_votable, USBPD_VOTER, true, 0);
+				vote(pd->passthrough_dis_votable, USBPD_VOTER, true, 0);
+			}
+			interval = PPS_DANGEROUS_LOOP_TIME;
+			usbpd_info(&pd->dev, "passthrough_dis:%d, check:%d, vol:%d, cur:%d, isns:%d\n",
+					passthrough_dis, check, pd->requested_voltage,
+					pd->requested_current, isns);
+		} else
+			check = 0;
+	} else if (!cp_dis) {
+		if ((isns > (pd->requested_current + 1000)) &&
+				(pd->requested_voltage > DIV2_MODE_MIN_VBUS)) {
+			check++;
+			if (check >= PPS_DANGEROUS_CHECK_TIME) {
+				vote(pd->cp_disable_votable, USBPD_VOTER, true, 0);
+				vote(pd->passthrough_dis_votable, USBPD_VOTER, true, 0);
+			}
+			interval = PPS_DANGEROUS_LOOP_TIME;
+			usbpd_info(&pd->dev, "cp_dis:%d, check:%d, vol:%d, cur:%d, isns:%d\n",
+					cp_dis, check, pd->requested_voltage,
+					pd->requested_current, isns);
+		} else
+			check = 0;
+	} else
+		check = 0;
+
+end:
+	elapsed_us = ktime_us_delta(ktime_get(), pd->monitor_entry_time);
+	if (elapsed_us < PPS_MONITOR_INSERT_LOOP_US)
+		interval = PPS_DANGEROUS_LOOP_TIME;
+	else
+		interval = PPS_MONITOR_LOOP_TIME;
+
+	schedule_delayed_work(&pd->pps_monitor_work, msecs_to_jiffies(interval));
+}
+
+static void usbpd_fixed_pdo_workfunc(struct work_struct *w)
+{
+	struct usbpd *pd = container_of(w, struct usbpd, fixed_pdo_work.work);
+	union power_supply_propval val = {0};
+	int ret;
+
+	ret = power_supply_get_property(pd->usb_psy,
+			POWER_SUPPLY_PROP_PD_ACTIVE, &val);
+	if (ret)
+		usbpd_info(&pd->dev, "could not get pd active\n");
+
+	if (val.intval != POWER_SUPPLY_PD_ACTIVE)
+		return;
+
+	/* use xiaomi pps control state machine */
+	/*if (pd->non_qcom_pps_ctr && pd->spec_rev == USBPD_REV_30) {
+		usbpd_info(&pd->dev,
+			"PPS is controlled by ourself, return not support\n");
+		goto out;
+	}*/
+
+	/* Only allowed if we are already in explicit sink contract */
+	if (pd->current_state != PE_SNK_READY) {
+		usbpd_err(&pd->dev, "Cannot select new PDO yet\n");
+		goto out;
+	}
+
+	usbpd_info(&pd->dev, "fixed pdo force to select to 9V\n");
+	pd_select_pdo(pd, 2, 0, 0);
+
+	reinit_completion(&pd->is_ready);
+	pd->send_request = true;
+	kick_sm(pd, 0);
+
+	/* wait for operation to complete */
+	if (!wait_for_completion_timeout(&pd->is_ready,
+			msecs_to_jiffies(1000))) {
+		usbpd_err(&pd->dev, "request timed out\n");
+		goto out;
+	}
+
+	/* determine if request was accepted/rejected */
+	if (pd->selected_pdo != pd->requested_pdo ||
+			pd->current_voltage != pd->requested_voltage) {
+		usbpd_err(&pd->dev, "request rejected\n");
+	}
+out:
+	pd->send_request = false;
+}
+
+static void usbpd_pdo_workfunc(struct work_struct *w)
+{
+	struct usbpd *pd = container_of(w, struct usbpd, pdo_work);
+	int i, rc;
+	int max_volt, min_volt, max_curr;
+	int passthrough_curr_max = 0;
+	union power_supply_propval val = {0};
+	int pps_max_watts = 0;
+
+	for (i = 0; i < ARRAY_SIZE(pd->received_pdos); i++) {
+		u32 pdo = pd->received_pdos[i];
+
+		if (pd->received_pdos[2] == 0) {
+			pd->fix_pdo_5v = true;
+			usbpd_info(&pd->dev,"fixed pdo [2]= %d", pd->fix_pdo_5v);
+		}
+		if (pdo == 0)
+			break;
+
+		if (PD_SRC_PDO_TYPE(pdo) == PD_SRC_PDO_TYPE_FIXED) {
+			max_volt = PD_SRC_PDO_FIXED_VOLTAGE(pdo) * 50;
+			min_volt = PD_SRC_PDO_FIXED_VOLTAGE(pdo) * 50;
+			max_curr = PD_SRC_PDO_FIXED_MAX_CURR(pdo) * 10;
+		} else if (PD_SRC_PDO_TYPE(pdo) == PD_SRC_PDO_TYPE_AUGMENTED) {
+			max_volt = PD_APDO_MAX_VOLT(pdo) * 100;
+			min_volt = PD_APDO_MIN_VOLT(pdo) * 100;
+			max_curr = PD_APDO_MAX_CURR(pdo) * 50;
+			if (max_volt >= 10000 && pd->batt_2s) {
+				if (max_curr > passthrough_curr_max)
+					passthrough_curr_max = max_curr;
+				if (max_volt >= 20000)
+					pd->is_support_2s = true;
+			}
+			if (pps_max_watts < max_volt * max_curr) {
+				pps_max_watts = max_volt * max_curr;
+				if (pps_max_watts < USBPD_WEAK_PPS_POWER) {
+					pd->pps_weak_limit = true;
+					usbpd_info(&pd->dev, "weak pps detect\n");
+				}
+			}
+			pd->pps_found = true;
+			pd->pps_insert = true;
+		}
+		usbpd_info(&pd->dev, "%s max_volt:%d,min_volt:%d,max_curr:%d\n",
+				(PD_SRC_PDO_TYPE(pdo) == PD_SRC_PDO_TYPE_AUGMENTED) ? "PPS" : "PD2.0",
+				max_volt, min_volt, max_curr);
+	}
+
+	if (pd->batt_2s) {
+		if (!pd->verify_done || !pd->is_support_2s)
+			pd->pps_found = false;
+
+		if (!pd->pps_found) {
+			vote(pd->ffc_mode_dis_votable, USBPD_VOTER, true, 0);
+		}
+
+		if (passthrough_curr_max != 0) {
+			if (!pd->verifed)
+				passthrough_curr_max = max(passthrough_curr_max,
+						PD_UNVERIFY_PASSTHROUGH_CURR);
+			val.intval = passthrough_curr_max * 1000;
+			rc = power_supply_set_property(pd->usb_psy,
+					POWER_SUPPLY_PROP_PASSTHROUGH_CURR_MAX, &val);
+			if (rc < 0) {
+				usbpd_err(&pd->dev, "failed to set passthrough current %d, rc:%d\n",
+						passthrough_curr_max, rc);
+			}
+		}
+
+		if (pd->verifed) {
+			if (pps_max_watts >= USBPD_SUPER_PPS_POWER)
+				val.intval = QUICK_CHARGE_SUPER;
+			else
+				val.intval = QUICK_CHARGE_TURBE;
+			rc = power_supply_set_property(pd->usb_psy,
+					POWER_SUPPLY_PROP_QUICK_CHARGE_TYPE, &val);
+			if (rc < 0) {
+				usbpd_err(&pd->dev, "failed to set quick charge rc:%d\n", rc);
+			}
+
+			val.intval = pps_max_watts;
+			rc = power_supply_set_property(pd->usb_psy,
+					POWER_SUPPLY_PROP_QUICK_CHARGE_POWER, &val);
+			if (rc < 0) {
+				usbpd_err(&pd->dev, "failed to set quick charge rc:%d\n", rc);
+			}
+			usbpd_info(&pd->dev, "max_watts=%d, quik_charge:%d, pass_limit:%d\n",
+					pps_max_watts, val.intval, passthrough_curr_max);
+		}
+		if (pps_max_watts < USBPD_LOW_PPS_POWER && pps_max_watts != 0) {
+			vote(pd->cp_slave_disable_votable, USBPD_VOTER, true, 0);
+		}
+
+		if (pd->is_support_2s)
+			vote(pd->ffc_mode_dis_votable, USBPD_VOTER, false, 0);
+
+		if (pd->pps_found) {
+			pd->monitor_entry_time = ktime_get();
+			schedule_delayed_work(&pd->pps_monitor_work, msecs_to_jiffies(PPS_DANGEROUS_LOOP_TIME));
+		}
+	}
+
+	val.intval = pd->pps_found ?
+			POWER_SUPPLY_PD_PPS_ACTIVE :
+			POWER_SUPPLY_PD_ACTIVE;
+	power_supply_set_property(pd->usb_psy,
+			POWER_SUPPLY_PROP_PD_ACTIVE, &val);
+}
 
 static void usbpd_release(struct device *dev)
 {

@@ -363,7 +363,6 @@ static int ipa3_active_clients_log_init(void)
 	ipa3_ctx->ipa3_active_clients_logging.log_rdy = true;
 
 	return 0;
-
 }
 
 void ipa3_active_clients_log_clear(void)
