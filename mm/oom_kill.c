@@ -46,6 +46,7 @@
 #include <linux/psi.h>
 #include <linux/cred.h>
 #include <linux/nmi.h>
+#include <linux/cred.h>
 
 #include <asm/tlb.h>
 #include "internal.h"
