@@ -52,6 +52,10 @@
 #include "../dsp/lge_dsp_crosstalk.h"
 #endif
 
+#if defined(CONFIG_SND_LGE_CH_SWAPPER)
+#include "../dsp/lge_dsp_ch_swapper.h"
+#endif
+
 #ifndef CONFIG_DOLBY_DAP
 #undef DOLBY_ADM_COPP_TOPOLOGY_ID
 #define DOLBY_ADM_COPP_TOPOLOGY_ID 0xFFFFFFFE
@@ -1698,7 +1702,7 @@ static int msm_pcm_routing_channel_mixer_v2(int fe_id, bool perf_mode,
 	be_id = channel_mixer_v2[fe_id][sess_type].port_idx - 1;
 	if (be_id < 0 || be_id >= MSM_BACKEND_DAI_MAX) {
 		pr_err("%s: Received out of bounds be_id %d\n",
-				__func__, be_id);
+			__func__, be_id);
 		return -EINVAL;
 	}
 	channel_mixer_v2[fe_id][sess_type].input_channels[0] =
@@ -22032,6 +22036,12 @@ static const struct snd_kcontrol_new usb_rx_port_mixer_controls[] = {
 	MSM_BACKEND_DAI_USB_RX,
 	MSM_BACKEND_DAI_USB_TX, 1, 0, msm_routing_get_port_mixer,
 	msm_routing_put_port_mixer),
+#ifdef CONFIG_MACH_LITO_WINGLM	//CONFIG_MACH_LGE
+	SOC_DOUBLE_EXT("SLIM_8_TX", SND_SOC_NOPM,
+	MSM_BACKEND_DAI_USB_RX,
+	MSM_BACKEND_DAI_SLIMBUS_8_TX, 1, 0, msm_routing_get_port_mixer,
+	msm_routing_put_port_mixer),
+#endif
 };
 
 static const struct snd_kcontrol_new lsm1_mixer_controls[] = {
@@ -24380,6 +24390,51 @@ static int msm_doa_tracking_mon_get(struct snd_kcontrol *kcontrol,
 done:
 	return ret;
 }
+
+#ifdef CONFIG_SND_LGE_CH_SWAPPER
+static bool is_lge_ch_swapper_enabled;
+static int msm_routing_get_ch_swapper_control(struct snd_kcontrol *kcontrol,
+    struct snd_ctl_elem_value *ucontrol)
+{
+    pr_info("%s : enter \n", __func__);
+    ucontrol->value.integer.value[0] = is_lge_ch_swapper_enabled;
+    return 0;
+}
+
+static int msm_routing_put_ch_swapper_control(struct snd_kcontrol *kcontrol,
+    struct snd_ctl_elem_value *ucontrol)
+{
+    int rc = 0, param_enabled = 0;
+
+    param_enabled = (int16_t)ucontrol->value.integer.value[0];
+/*
+    if (is_lge_ch_swapper_enabled == param_enabled) {
+        pr_info("%s: status(%d) is not changed, end result = %d\n", __func__, param_enabled, rc);
+        return rc;
+    }
+*/
+    pr_info("%s : enter ch swapper enabled %d, param_enabled %d\n", __func__, (int16_t)ucontrol->value.integer.value[0], param_enabled);
+
+    rc = q6adm_set_ch_swapper_parms(AFE_PORT_ID_TX_CODEC_DMA_TX_3, LGE_CH_SWAPPER_MODULE_ID, param_enabled);
+
+    if (rc){
+        pr_info("%s, failed to set adm...");
+        rc = -ESRCH;
+    }
+
+    is_lge_ch_swapper_enabled = param_enabled;
+
+    pr_info("%s: end result = %d\n", __func__, rc);
+    return rc;
+}
+
+static const struct snd_kcontrol_new msm_lge_ch_swapper_controls[] = {
+    SOC_SINGLE_EXT("LGE CH SWAPPER", SND_SOC_NOPM, 0,
+        1, 0, msm_routing_get_ch_swapper_control,
+        msm_routing_put_ch_swapper_control),
+};
+#endif
+
 #if defined(CONFIG_SND_LGE_CROSSTALK)
 static int msm_routing_get_crosstalk_headset_mode_control(struct snd_kcontrol *kcontrol,
 					  struct snd_ctl_elem_value *ucontrol)
@@ -27327,8 +27382,7 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"MultiMedia17 Mixer", "TX_CDC_DMA_TX_4", "TX_CDC_DMA_TX_4"},
 	{"MultiMedia17 Mixer", "TX_CDC_DMA_TX_5", "TX_CDC_DMA_TX_5"},
 	{"MultiMedia17 Mixer", "AFE_LOOPBACK_TX", "AFE_LOOPBACK_TX"},
-// #ifdef CONFIG_MACH_LGE
-#ifdef CONFIG_MACH_LITO_WINGLM
+#ifdef CONFIG_MACH_LITO_WINGLM	//CONFIG_MACH_LGE
 	{"MultiMedia17 Mixer", "USB_AUDIO_TX", "USB_AUDIO_TX"},
 #endif
 
@@ -30855,6 +30909,8 @@ static const struct snd_soc_dapm_route intercon_mi2s[] = {
 	{"RX_CDC_DMA_RX_0 Port Mixer", "SENARY_MI2S_TX", "SENARY_MI2S_TX"},
 #endif
 	{"RX_CDC_DMA_RX_1 Port Mixer", "TERT_MI2S_TX", "TERT_MI2S_TX"},
+#endif
+	{"RX_CDC_DMA_RX_1 Port Mixer", "TERT_MI2S_TX", "TERT_MI2S_TX"},
 
 	{"SLIMBUS_0_RX Port Mixer", "MI2S_TX", "MI2S_TX"},
 	{"SLIMBUS_0_RX Port Mixer", "PRI_MI2S_TX", "PRI_MI2S_TX"},
@@ -32087,6 +32143,11 @@ static int msm_routing_probe(struct snd_soc_component *component)
     snd_soc_add_component_controls(component, msm_lge_stereo_effect_controls,
                     ARRAY_SIZE(msm_lge_stereo_effect_controls));
 #endif
+#ifdef CONFIG_SND_LGE_CH_SWAPPER
+    snd_soc_add_component_controls(component, msm_lge_ch_swapper_controls,
+                    ARRAY_SIZE(msm_lge_ch_swapper_controls));
+#endif
+
 	snd_soc_add_component_controls(component,
 			port_multi_channel_map_mixer_controls,
 			ARRAY_SIZE(port_multi_channel_map_mixer_controls));

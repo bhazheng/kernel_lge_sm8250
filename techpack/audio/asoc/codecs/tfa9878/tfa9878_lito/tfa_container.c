@@ -728,7 +728,7 @@ enum tfa98xx_error tfa_cont_write_file(struct tfa_device *tfa,
 	int temp_index;
 #endif
 #if defined(TFA_RECONFIG_WITHOUT_RESET)
-	uint8_t org_cmd;
+	uint8_t org_cmd = 0xff;
 #endif
 
 	if (tfa->verbose)

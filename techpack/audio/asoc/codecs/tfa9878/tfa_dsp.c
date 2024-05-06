@@ -6031,7 +6031,7 @@ int tfa_ext_event_handler(struct tfa_device *tfa,
 #define UPPER_LIMIT_CAL_P_N1A 7400 // Top
 #define LOWER_LIMIT_CAL_S_N1A 5400 // Bottom
 #define UPPER_LIMIT_CAL_S_N1A 7000 // Bottom
-#elif defined(CONFIG_MACH_LITO_ACELM)
+#elif defined(CONFIG_MACH_LITO_ACELM) || defined(CONFIG_MACH_LITO_MIXLM)
 #define LOWER_LIMIT_CAL_P_N1A 6100 // Top
 #define UPPER_LIMIT_CAL_P_N1A 7700 // Top
 #define LOWER_LIMIT_CAL_S_N1A 5400 // Bottom

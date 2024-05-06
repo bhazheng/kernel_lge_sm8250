@@ -75,3 +75,6 @@
 #define CONFIG_SND_LGE_HAC_GPIO 1
 #endif
 
+#ifdef CONFIG_MACH_LAGOON_SMASHJLM
+#define CONFIG_SND_LGE_CH_SWAPPER 1
+#endif

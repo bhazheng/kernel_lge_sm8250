@@ -1124,7 +1124,7 @@ int wcd938x_mbhc_init(struct wcd938x_mbhc **mbhc,
 	snd_soc_add_component_controls(component, hph_type_detect_controls,
 				   ARRAY_SIZE(hph_type_detect_controls));
 
-#if defined(CONFIG_MACH_LITO_CAYMANLM) || defined(CONFIG_MACH_LITO_ACELM)
+#if defined(CONFIG_MACH_LITO_CAYMANLM) || defined(CONFIG_MACH_LITO_ACELM) || defined(CONFIG_MACH_LITO_MIXLM)
 	snd_soc_component_write(component, WCD938X_MICB2_TEST_CTL_3, 0xA4);
 #endif
 

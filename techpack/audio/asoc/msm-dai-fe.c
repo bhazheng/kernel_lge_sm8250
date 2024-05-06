@@ -918,8 +918,14 @@ static struct snd_soc_dai_driver msm_fe_dais[] = {
 			.stream_name = "Tertiary MI2S_TX Hostless Capture",
 			.aif_name = "TERT_MI2S_UL_HL",
 			.rates = SNDRV_PCM_RATE_8000_48000,
+#ifdef CONFIG_SND_SMARTPA_AW882XX
+			.formats = (SNDRV_PCM_FMTBIT_S16_LE |
+				    SNDRV_PCM_FMTBIT_S24_LE |
+				    SNDRV_PCM_FMTBIT_S32_LE),
+#else
 			.formats = (SNDRV_PCM_FMTBIT_S16_LE |
 				    SNDRV_PCM_FMTBIT_S24_LE),
+#endif
 			.channels_min = 1,
 			.channels_max = 2,
 			.rate_min = 8000,

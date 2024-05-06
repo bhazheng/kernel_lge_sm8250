@@ -28,6 +28,9 @@
 #if defined(CONFIG_SND_LGE_TX_NXP_LIB)
 #include "lge_dsp_nxp_lib.h"
 #endif
+#if defined(CONFIG_SND_LGE_CH_SWAPPER)
+#include "lge_dsp_ch_swapper.h"
+#endif
 #define TIMEOUT_MS 1000
 
 #define RESET_COPP_ID 99
@@ -5686,6 +5689,55 @@ fail_cmd :
 EXPORT_SYMBOL(q6adm_set_tx_mix_parms);
 
 
+#endif
+
+#if defined(CONFIG_SND_LGE_CH_SWAPPER)
+int q6adm_set_ch_swapper_parms(int port_id, int param_id, int param_data)
+{
+    int rc;
+    int port_idx, copp_idx;
+    struct param_hdr_v3            param_hdr;
+
+    port_id = afe_convert_virtual_to_portid(port_id);
+    port_idx = adm_validate_and_get_port_index(port_id);
+    copp_idx = adm_get_default_copp_idx(port_id);
+
+    pr_info("%s : port_id %x, copp_idx %d, port_idx %d\n", __func__, port_id, copp_idx, port_idx);
+
+    if (port_idx < 0) {
+        pr_err("%s : Invalid port_id 0x%x\n", __func__, port_id);
+        return -EINVAL;
+    }
+
+    if (copp_idx < 0 || copp_idx >= MAX_COPPS_PER_PORT) {
+        pr_err("%s: Invalid copp_num: %d\n", __func__, copp_idx);
+        return -EINVAL;
+    }
+
+    memset(&param_hdr, 0, sizeof(param_hdr));
+
+    param_hdr.instance_id = 0x8000;
+    param_hdr.module_id = LGE_CH_SWAPPER_PARAM_ID_ENABLE;
+    param_hdr.param_id = param_id;
+    param_hdr.param_size = sizeof(int);
+    param_hdr.reserved = 0;
+
+    pr_info("%s : param_size %d param %d\n", __func__, param_hdr.param_size, param_data);
+
+    rc = adm_pack_and_set_one_pp_param(port_id, copp_idx, param_hdr, (uint8_t*)&param_data);
+
+    if (rc)
+    {
+        pr_err("%s: Failed to set media format configuration data, err %d\n",
+               __func__, rc);
+        goto fail_cmd;
+    }
+    return 0;
+
+fail_cmd :
+    return rc;
+}
+EXPORT_SYMBOL(q6adm_set_ch_swapper_parms);
 #endif
 
 #if defined (CONFIG_SND_LGE_CROSSTALK)

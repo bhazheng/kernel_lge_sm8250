@@ -77,7 +77,8 @@ SNDRV_PCM_FMTBIT_S24_LE | SNDRV_PCM_FMTBIT_S32_LE)
 
 #define TF98XX_MAX_DSP_START_TRY_COUNT	10
 
-#define TFA_DBGFS_CHECK_MTPEX
+#define TFA_FS_CHECK_MTPEX
+#define CALFUNC_IN_SYSFS
 
 /* data accessible by all instances */
 /* Memory pool used for DSP messages */
@@ -91,7 +92,7 @@ static int tfa98xx_sync_count = 0;
 static int tfa98xx_monitor_count = 0;
 #define MONITOR_COUNT_MAX 5
 
-static LIST_HEAD(profile_list);        /* list of user selectable profiles */
+static LIST_HEAD(profile_list); /* list of user selectable profiles */
 static int tfa98xx_mixer_profiles = 0; /* number of user selectable profiles */
 static int tfa98xx_mixer_profile = 0;  /* current mixer profile */
 static struct snd_kcontrol_new *tfa98xx_controls;
@@ -154,11 +155,17 @@ static int get_profile_id_for_sr(int id, unsigned int rate);
 static int _tfa98xx_mute(struct tfa98xx *tfa98xx, int mute, int stream);
 static int _tfa98xx_stop(struct tfa98xx *tfa98xx);
 
+static void tfa98xx_check_calibration(struct tfa98xx *tfa98xx);
+
 #if defined(CONFIG_DEBUG_FS) && defined(TFA_READ_BATTERY_TEMP)
 static enum tfa98xx_error tfa98xx_read_battery_temp(short *value);
 #endif
 
 #ifdef CONFIG_MACH_KONA_TIMELM
+extern int lge_get_board_rev_no_for_dlkm(void);
+#endif /* CONFIG_MACH_LGE */
+
+#ifdef CONFIG_MACH_LITO_WINGLM
 extern int lge_get_board_rev_no_for_dlkm(void);
 #endif /* CONFIG_MACH_LGE */
 
@@ -187,7 +194,6 @@ static const struct tfa98xx_rate rate_to_fssel[] = {
 #endif
 };
 
-
 static inline char *_tfa_cont_profile_name
 (struct tfa98xx *tfa98xx, int prof_idx)
 {
@@ -209,7 +215,7 @@ static enum tfa_error tfa98xx_write_re25(struct tfa_device *tfa, int value)
 		err = tfa_dev_mtp_set(tfa, TFA_MTP_RE25_PRIM, value);
 	}
 	if (err == tfa_error_ok) {
-		/* set MTPEX to copy RE25 into MTP  */
+		/* set MTPEX to copy RE25 into MTP */
 		err = tfa_dev_mtp_set(tfa, TFA_MTP_EX, 2);
 	}
 
@@ -221,7 +227,8 @@ static enum tfa_error
 tfa98xx_tfa_start(struct tfa98xx *tfa98xx, int next_profile, int vstep)
 {
 	enum tfa_error err;
-	ktime_t start_time, stop_time;
+	ktime_t start_time = 0;
+	ktime_t stop_time = 0;
 	u64 delta_time;
 
 	if (trace_level & 8)
@@ -410,8 +417,8 @@ __tfa98xx_inputdev_check_register(struct tfa98xx *tfa98xx,
 	}
 
 	/* Check for device support:
-	 *  - at device level
-	 *  - at container (profile) level
+	 * - at device level
+	 * - at container (profile) level
 	 */
 	if (!(tfa98xx->flags & TFA98XX_FLAG_TAPDET_AVAILABLE) ||
 		!tap_profile ||
@@ -462,7 +469,7 @@ static int tfa98xx_dbgfs_otc_get(void *data, u64 *val)
 	mutex_unlock(&tfa98xx->dsp_lock);
 
 	if (value < 0) {
-		pr_err("[0x%x] Unable to check DSP access: %d\n",
+		pr_err("[0x%x] Unable to access MTPOTC: %d\n",
 			tfa98xx->i2c->addr, value);
 		return -EIO;
 	}
@@ -490,7 +497,7 @@ static int tfa98xx_dbgfs_otc_set(void *data, u64 val)
 	mutex_unlock(&tfa98xx->dsp_lock);
 
 	if (err != tfa_error_ok) {
-		pr_err("[0x%x] Unable to check DSP access: %d\n",
+		pr_err("[0x%x] Unable to access MTPOTC: err %d\n",
 			tfa98xx->i2c->addr, err);
 		return -EIO;
 	}
@@ -511,11 +518,10 @@ static int tfa98xx_dbgfs_mtpex_get(void *data, u64 *val)
 	mutex_unlock(&tfa98xx->dsp_lock);
 
 	if (value < 0) {
-		pr_err("[0x%x] Unable to check DSP access: %d\n",
+		pr_err("[0x%x] Unable to access MTPEX: %d\n",
 			tfa98xx->i2c->addr, value);
 		return -EIO;
 	}
-
 
 	*val = value;
 	pr_debug("[0x%x] MTPEX : %d\n", tfa98xx->i2c->addr, value);
@@ -536,11 +542,11 @@ static int tfa98xx_dbgfs_mtpex_set(void *data, u64 val)
 	}
 
 	mutex_lock(&tfa98xx->dsp_lock);
-	err = tfa_dev_mtp_set(tfa98xx->tfa, TFA_MTP_EX, val);
+	err = tfa_dev_mtp_set(tfa98xx->tfa, TFA_MTP_EX, 0);
 	mutex_unlock(&tfa98xx->dsp_lock);
 
 	if (err != tfa_error_ok) {
-		pr_err("[0x%x] Unable to check DSP access: %d\n",
+		pr_err("[0x%x] Unable to access MTPEX: err %d (suspended)\n",
 			tfa98xx->i2c->addr, err);
 		tfa98xx->tfa->reset_mtpex = 1; /* suspend until TFA98xx is active */
 		return -EIO;
@@ -587,30 +593,13 @@ static ssize_t tfa98xx_dbgfs_start_get(struct file *file,
 	struct tfa98xx *tfa98xx = i2c_get_clientdata(i2c);
 	char *str;
 	int ret = 0;
-#if defined(TFA_DBGFS_CHECK_MTPEX)
-	unsigned short value;
-#endif
 
 	str = kmalloc(PAGE_SIZE, GFP_KERNEL);
 	if (!str)
 		return -ENOMEM;
 
-#if defined(TFA_DBGFS_CHECK_MTPEX)
-	mutex_lock(&tfa98xx->dsp_lock);
-	value = tfa_dev_mtp_get(tfa98xx->tfa, TFA_MTP_EX);
-	mutex_unlock(&tfa98xx->dsp_lock);
-
-	if (value > 0) {
-		tfa98xx->calibrate_done =
-			(value) ? 1 : 0;
-		pr_info("[0x%x] calibrate_done = MTPEX (%d)\n",
-			tfa98xx->i2c->addr, tfa98xx->calibrate_done);
-
-	} else {
-		pr_info("[0x%x] error in reading MTPEX\n",
-			tfa98xx->i2c->addr);
-		tfa98xx->calibrate_done = 0;
-	}
+#if defined(TFA_FS_CHECK_MTPEX)
+	tfa98xx_check_calibration(tfa98xx);
 #endif
 
 	if (tfa98xx->calibrate_done) {
@@ -622,7 +611,6 @@ static ssize_t tfa98xx_dbgfs_start_get(struct file *file,
 		snprintf(str, PAGE_SIZE, "Fail\n");
 		ret = sizeof("Fail");
 	}
-	//ret = sizeof(str);
 
 	ret = simple_read_from_buffer(user_buf, count, ppos, str, ret);
 	kfree(str);
@@ -639,7 +627,7 @@ static ssize_t tfa98xx_dbgfs_start_set(struct file *file,
 	char buf[32];
 	const char ref[] = "1"; /* "please calibrate now" */
 	int buf_size, cal_profile = 0;
-#if defined(TFA_DBGFS_CHECK_MTPEX)
+#if defined(TFA_FS_CHECK_MTPEX)
 	unsigned short value;
 #endif
 	u64 otc_val = 1;
@@ -650,13 +638,13 @@ static ssize_t tfa98xx_dbgfs_start_set(struct file *file,
 	if (tfa98xx->pstream == 0) {
 		pr_info("%s: Playback Fail. speaker init calibration Fail\n",
 			__func__);
-#if !defined(TFA_DBGFS_CHECK_MTPEX)
+#if !defined(TFA_FS_CHECK_MTPEX)
 		tfa98xx->calibrate_done = 0;
 #endif
 		return count;
 	}
 
-#if defined(TFA_DBGFS_CHECK_MTPEX)
+#if defined(TFA_FS_CHECK_MTPEX)
 	if (!tfa98xx->calibrate_done) {
 		mutex_lock(&tfa98xx->dsp_lock);
 		value = tfa_dev_mtp_get(tfa98xx->tfa, TFA_MTP_EX);
@@ -784,8 +772,7 @@ static ssize_t tfa98xx_dbgfs_r_read(struct file *file,
 			"Prim:%d mOhms, Sec:%d mOhms\n",
 			tfa98xx->tfa->mohm[0],
 			tfa98xx->tfa->mohm[1]);
-	}
-	else {
+	} else {
 		ret = snprintf(str, PAGE_SIZE,
 			"Prim:%d mOhms\n",
 			tfa98xx->tfa->mohm[0]);
@@ -941,7 +928,6 @@ static ssize_t tfa98xx_dbgfs_dsp_state_set(struct file *file,
 
 	return count;
 }
-
 
 static ssize_t tfa98xx_dbgfs_fw_state_get(struct file *file,
 	char __user *user_buf, size_t count, loff_t *ppos)
@@ -1162,7 +1148,7 @@ static ssize_t tfa98xx_dbgfs_dsp_write(struct file *file,
 		ret = -ENOMEM;
 		pr_debug("[0x%x] can not allocate memory\n",
 			tfa98xx->i2c->addr);
-		return  ret;
+		return ret;
 	}
 
 	ret = copy_from_user(buffer, user_buf, count);
@@ -1322,43 +1308,43 @@ static ssize_t tfa98xx_dbgfs_show_cal_read(struct file *file,
 		tfa_cont_device_name(tfa98xx->tfa->cnt, tfa98xx->tfa->dev_idx),
 		mtpex, mtp);
 
-	return  simple_read_from_buffer(user_buf,
+	return simple_read_from_buffer(user_buf,
 		count, ppos, out_buf, sizeof(out_buf));
 }
 
 /* Direct registers access - provide register address in hex */
-#define TFA98XX_DEBUGFS_REG_SET(__reg)					\
-static int tfa98xx_dbgfs_reg_##__reg##_set(void *data, u64 val)		\
-{									\
-	struct i2c_client *i2c = (struct i2c_client *)data;		\
-	struct tfa98xx *tfa98xx = i2c_get_clientdata(i2c);		\
-	unsigned int ret, value;					\
-									\
-	ret = regmap_write(tfa98xx->regmap, 0x##__reg, (val & 0xffff));	\
-	value = val & 0xffff;						\
-	return 0;							\
-}									\
-static int tfa98xx_dbgfs_reg_##__reg##_get(void *data, u64 *val)	\
-{									\
-	struct i2c_client *i2c = (struct i2c_client *)data;		\
-	struct tfa98xx *tfa98xx = i2c_get_clientdata(i2c);		\
-	unsigned int value;						\
-	int ret;							\
-									\
-	ret = regmap_read(tfa98xx->regmap, 0x##__reg, &value);		\
-	*val = value;							\
-	return 0;							\
-}									\
+#define TFA98XX_DEBUGFS_REG_SET(__reg)	\
+static int tfa98xx_dbgfs_reg_##__reg##_set(void *data, u64 val) \
+{ \
+	struct i2c_client *i2c = (struct i2c_client *)data; \
+	struct tfa98xx *tfa98xx = i2c_get_clientdata(i2c); \
+	unsigned int ret, value; \
+ \
+	ret = regmap_write(tfa98xx->regmap, 0x##__reg, (val & 0xffff)); \
+	value = val & 0xffff; \
+	return 0; \
+} \
+static int tfa98xx_dbgfs_reg_##__reg##_get(void *data, u64 *val) \
+{ \
+	struct i2c_client *i2c = (struct i2c_client *)data; \
+	struct tfa98xx *tfa98xx = i2c_get_clientdata(i2c); \
+	unsigned int value; \
+	int ret; \
+ \
+	ret = regmap_read(tfa98xx->regmap, 0x##__reg, &value); \
+	*val = value; \
+	return 0; \
+} \
 DEFINE_SIMPLE_ATTRIBUTE(tfa98xx_dbgfs_reg_##__reg##_fops, \
-			tfa98xx_dbgfs_reg_##__reg##_get, \
-			tfa98xx_dbgfs_reg_##__reg##_set, "0x%llx\n")
+	tfa98xx_dbgfs_reg_##__reg##_get, \
+	tfa98xx_dbgfs_reg_##__reg##_set, "0x%llx\n")
 
 #define VAL(str) #str
 #define TOSTRING(str) VAL(str)
-#define TFA98XX_DEBUGFS_REG_CREATE_FILE(__reg, __name)				\
-	debugfs_create_file(TOSTRING(__reg) "-" TOSTRING(__name),	\
-					S_IRUGO|S_IWUSR|S_IWGRP, dbg_reg_dir,	\
-					i2c, &tfa98xx_dbgfs_reg_##__reg##_fops);
+#define TFA98XX_DEBUGFS_REG_CREATE_FILE(__reg, __name)	\
+	debugfs_create_file(TOSTRING(__reg) "-" TOSTRING(__name), \
+		S_IRUGO|S_IWUSR|S_IWGRP, dbg_reg_dir, \
+		i2c, &tfa98xx_dbgfs_reg_##__reg##_fops);
 
 TFA98XX_DEBUGFS_REG_SET(00);
 TFA98XX_DEBUGFS_REG_SET(01);
@@ -1517,7 +1503,28 @@ static void tfa98xx_debug_remove(struct tfa98xx *tfa98xx)
 {
 	debugfs_remove_recursive(tfa98xx->dbg_dir);
 }
-#endif
+#endif /* CONFIG_DEBUG_FS */
+
+static void tfa98xx_check_calibration(struct tfa98xx *tfa98xx)
+{
+	unsigned short value = 0;
+
+	mutex_lock(&tfa98xx->dsp_lock);
+	value = tfa_dev_mtp_get(tfa98xx->tfa, TFA_MTP_EX);
+	mutex_unlock(&tfa98xx->dsp_lock);
+
+	if (value > 0) {
+		tfa98xx->calibrate_done =
+			(value) ? 1 : 0;
+		pr_info("[0x%x] calibrate_done = MTPEX (%d)\n",
+			tfa98xx->i2c->addr, tfa98xx->calibrate_done);
+
+	} else {
+		pr_info("[0x%x] error in reading MTPEX\n",
+			tfa98xx->i2c->addr);
+		tfa98xx->calibrate_done = 0;
+	}
+}
 
 static void tfa98xx_set_dsp_configured(struct tfa98xx *tfa98xx)
 {
@@ -2172,9 +2179,9 @@ static int tfa98xx_create_controls(struct tfa98xx *tfa98xx)
 	struct tfa98xx_baseprofile *bprofile;
 
 	/* Create the following controls:
-	 *  - enum control to select the active profile
-	 *  - one volume control for each profile hosting a vstep
-	 *  - Stop control on TFA1 devices
+	 * - enum control to select the active profile
+	 * - one volume control for each profile hosting a vstep
+	 * - Stop control on TFA1 devices
 	 */
 
 	nr_controls = 2; /* Profile and stop control */
@@ -2372,7 +2379,8 @@ static int tfa98xx_append_i2c_address(struct device *dev,
 
 	if (dai_drv && num_dai > 0)
 		for (i = 0; i < num_dai; i++) {
-			snprintf(buf, 50, "%s-%x", dai_drv[i].name,
+			snprintf(buf, 50, "%s-%x",
+				dai_drv[i].name,
 				addr);
 			dai_drv[i].name = tfa98xx_devm_kstrdup(dev, buf);
 			pr_info("dai_drv[%d].name=%s\n", i, dai_drv[i].name);
@@ -2396,10 +2404,10 @@ static int tfa98xx_append_i2c_address(struct device *dev,
 
 	/* the idea behind this is convert:
 	 * SND_SOC_DAPM_AIF_IN
-	 *   ("AIF IN","AIF Playback",0,SND_SOC_NOPM,0,0),
+	 *  ("AIF IN","AIF Playback",0,SND_SOC_NOPM,0,0),
 	 * into:
 	 * SND_SOC_DAPM_AIF_IN
-	 *   ("AIF IN","AIF Playback-2-36",0,SND_SOC_NOPM,0,0),
+	 *  ("AIF IN","AIF Playback-2-36",0,SND_SOC_NOPM,0,0),
 	 */
 	if (widgets && num_widgets > 0)
 		for (i = 0; i < num_widgets; i++) {
@@ -2724,7 +2732,7 @@ enum tfa98xx_error tfa98xx_read_data(struct tfa_device *tfa,
 	};
 
 	reg_buf = (unsigned char *)
-		kmalloc(sizeof(reg), GFP_DMA); // GRP_KERNEL  also works,
+		kmalloc(sizeof(reg), GFP_DMA); /* GRP_KERNEL also works */
 	if (!reg_buf)
 		return -ENOMEM;;
 
@@ -2917,7 +2925,6 @@ enum tfa98xx_error ipi_tfadsp_read(struct tfa_device *tfa,
 #endif /* TFA_SET_EXT_INTERNALLY */
 
 /* Interrupts management */
-
 static void tfa98xx_interrupt_enable_tfa2(struct tfa98xx *tfa98xx, bool enable)
 {
 #if 0
@@ -2939,8 +2946,8 @@ static void tfa98xx_interrupt_enable_tfa2(struct tfa98xx *tfa98xx, bool enable)
 /* Check if tap-detection can and shall be enabled.
  * Configure SPK interrupt accordingly or setup polling mode
  * Tap-detection shall be active if:
- *  - the service is enabled (tapdet_open), AND
- *  - the current profile is a tap-detection profile
+ * - the service is enabled (tapdet_open), AND
+ * - the current profile is a tap-detection profile
  * On TFA1 familiy of devices, activating tap-detection means enabling the SPK
  * interrupt if available.
  * We also update the tapdet_enabled and tapdet_poll variables.
@@ -3030,7 +3037,7 @@ tfa98xx_container_loaded(const struct firmware *cont, void *context)
 #if defined(PRELOAD_FIRMWARE_BY_STARTING_AT_PROBING)
 	int ret;
 #endif
-#if defined(TFA_DBGFS_CHECK_MTPEX)
+#if defined(TFA_FS_CHECK_MTPEX)
 #if KERNEL_VERSION(4, 18, 0) <= LINUX_VERSION_CODE
 	unsigned int value;
 #else
@@ -3082,8 +3089,7 @@ tfa98xx_container_loaded(const struct firmware *cont, void *context)
 		}
 
 		tfa98xx_container = container;
-	}
-	else {
+	} else {
 		pr_debug("container file already loaded...\n");
 		container = tfa98xx_container;
 		release_firmware(cont);
@@ -3162,7 +3168,7 @@ tfa98xx_container_loaded(const struct firmware *cont, void *context)
 
 	tfa98xx->dsp_fw_state = TFA98XX_DSP_FW_OK;
 
-#if defined(TFA_DBGFS_CHECK_MTPEX)
+#if defined(TFA_FS_CHECK_MTPEX)
 #if KERNEL_VERSION(4, 18, 0) <= LINUX_VERSION_CODE
 	value = snd_soc_component_read32(tfa98xx->component,
 		TFA98XX_KEY2_PROTECTED_MTP0);
@@ -3202,6 +3208,7 @@ tfa98xx_container_loaded(const struct firmware *cont, void *context)
 	}
 
 	/* Only controls for master device */
+	/* for the first device */
 	if (tfa98xx->tfa->dev_idx == 0)
 		tfa98xx_create_controls(tfa98xx);
 
@@ -4120,7 +4127,7 @@ static int tfa98xx_probe(struct snd_soc_codec *codec)
 {
 	struct tfa98xx *tfa98xx = snd_soc_codec_get_drvdata(codec);
 #endif
-	int ret;
+	int ret = 0;
 
 	pr_debug("\n");
 
@@ -4158,9 +4165,15 @@ static int tfa98xx_probe(struct snd_soc_codec *codec)
     if (lge_get_board_rev_no_for_dlkm() <= 7)
         fw_name = "tfa98xx_reva.cnt";
 
+    dev_info(component->dev, "use cnt file rev_no %d, fw_name %s\n",
+		lge_get_board_rev_no_for_dlkm(), fw_name);
+#endif
+#if defined(CONFIG_MACH_LITO_WINGLM)
+    if (lge_get_board_rev_no_for_dlkm() <= 3)
+        fw_name = "tfa98xx_rev0.cnt";
+
     dev_info(component->dev, "use cnt file rev_no %d, fw_name %s\n", lge_get_board_rev_no_for_dlkm(), fw_name);
 #endif
-
 	ret = tfa98xx_load_container(tfa98xx);
 	pr_debug("Container loading requested: %d\n", ret);
 
@@ -4443,6 +4456,161 @@ retry:
 	return ((ret > 1) ? count : -EIO);
 }
 
+#ifdef CALFUNC_IN_SYSFS
+static ssize_t tfa98xx_calibrate_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct tfa98xx *tfa98xx = dev_get_drvdata(dev);
+	int mtp = 0, mtpex = 0;
+	int count = 0;
+
+	if (tfa98xx->tfa->tfa_family == 0) {
+		pr_err("[0x%x] %s: system is not initialized: not probed yet!\n",
+			tfa98xx->i2c->addr, __func__);
+		return -EIO;
+	}
+
+#if defined(TFA_FS_CHECK_MTPEX)
+	tfa98xx_check_calibration(tfa98xx);
+#endif
+
+	if (tfa98xx->calibrate_done) {
+		pr_info("[0x%x] Calibration Success\n", tfa98xx->i2c->addr);
+		count = snprintf(buf, PAGE_SIZE, "[0x%02x] Success\n",
+			tfa98xx->i2c->addr);
+	} else {
+		pr_info("[0x%x] Calibration Fail\n", tfa98xx->i2c->addr);
+		count = snprintf(buf, PAGE_SIZE, "[0x%02x] Fail\n",
+			tfa98xx->i2c->addr);
+	}
+
+	mtp = tfa_dev_mtp_get(tfa98xx->tfa, TFA_MTP_RE25);
+	mtpex = TFA_GET_BF(tfa98xx->tfa, MTPEX);
+
+	pr_info("[0x%x] MTPEX: %d, MTP: %d mOhm\n",
+		tfa98xx->i2c->addr, mtpex, mtp);
+
+	return count;
+}
+
+static ssize_t tfa98xx_calibrate_store(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count)
+{
+/* to prevent attack to tfa98xx_calibrate_store */
+
+	return count;
+}
+
+static ssize_t tfa98xx_mtpex_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct tfa98xx *tfa98xx = dev_get_drvdata(dev);
+	int count = 0, value;
+
+	if (tfa98xx->tfa->tfa_family == 0) {
+		pr_err("[0x%x] %s: system is not initialized: not probed yet!\n",
+			tfa98xx->i2c->addr, __func__);
+		return -EIO;
+	}
+
+	mutex_lock(&tfa98xx->dsp_lock);
+	value = tfa_dev_mtp_get(tfa98xx->tfa, TFA_MTP_EX);
+	mutex_unlock(&tfa98xx->dsp_lock);
+
+	if (value < 0) {
+		pr_err("[0x%x] Unable to access MTPEX: %d\n",
+			tfa98xx->i2c->addr, value);
+		return -EIO;
+	}
+
+	pr_debug("[0x%x] MTPEX : %d\n", tfa98xx->i2c->addr, value);
+	count = snprintf(buf, PAGE_SIZE, "[0x%02x] MTPEX %d\n",
+		tfa98xx->i2c->addr, value);
+
+	return count;
+}
+
+static ssize_t tfa98xx_mtpex_store(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct tfa98xx *tfa98xx = dev_get_drvdata(dev);
+	enum tfa_error err;
+	const char ref[] = "0"; /* "please calibrate now" */
+
+	if (tfa98xx->tfa->tfa_family == 0) {
+		pr_err("[0x%x] %s: system is not initialized: not probed yet!\n",
+			tfa98xx->i2c->addr, __func__);
+		return -EIO;
+	}
+
+	/* check string length, and account for eol */
+	if (count > sizeof(ref) + 1 || count < (sizeof(ref) - 1))
+		return -EINVAL;
+
+	/* Compare string, excluding the trailing \0 and the potentials eol */
+	if (strncmp(buf, ref, sizeof(ref) - 1)) {
+		pr_info("[0x%x] Can only clear MTPEX (0 value expected)\n",
+			tfa98xx->i2c->addr);
+		return -EINVAL;
+	}
+
+	mutex_lock(&tfa98xx->dsp_lock);
+	err = tfa_dev_mtp_set(tfa98xx->tfa, TFA_MTP_EX, 0);
+	mutex_unlock(&tfa98xx->dsp_lock);
+
+	if (err != tfa_error_ok) {
+		pr_err("[0x%x] Unable to access MTPEX: err %d (suspended)\n",
+			tfa98xx->i2c->addr, err);
+		tfa98xx->tfa->reset_mtpex = 1; /* suspend until TFA98xx is active */
+		return -EIO;
+	}
+
+	pr_info("[0x%x] MTPEX < 0\n", tfa98xx->i2c->addr);
+
+	return count;
+}
+
+static ssize_t tfa98xx_re25_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct tfa98xx *tfa98xx = dev_get_drvdata(dev);
+	int count = 0, mtpex, value;
+
+	if (tfa98xx->tfa->tfa_family == 0) {
+		pr_err("[0x%x] %s: system is not initialized: not probed yet!\n",
+			tfa98xx->i2c->addr, __func__);
+		return -EIO;
+	}
+
+	mutex_lock(&tfa98xx->dsp_lock);
+	mtpex = tfa_dev_mtp_get(tfa98xx->tfa, TFA_MTP_EX);
+	if (mtpex)
+		value = tfa_dev_mtp_get(tfa98xx->tfa, TFA_MTP_RE25);
+	else
+		value = 0;
+	mutex_unlock(&tfa98xx->dsp_lock);
+
+	if (value < 0) {
+		pr_err("[0x%x] Unable to access MTP RE25: %d\n",
+			tfa98xx->i2c->addr, value);
+		return -EIO;
+	}
+
+	pr_debug("[0x%x] MTP : %d\n", tfa98xx->i2c->addr, value);
+	count = snprintf(buf, PAGE_SIZE, "[0x%02x] Calibration data %d mOhm\n",
+		tfa98xx->i2c->addr, value);
+
+	return count;
+}
+
+static ssize_t tfa98xx_re25_store(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count)
+{
+	/* to prevent attack to tfa98xx_re25_store */
+	return count;
+}
+#endif /* CALFUNC_IN_SYSFS */
+
 static struct bin_attribute dev_attr_rw = {
 	.attr = {
 		.name = "rw",
@@ -4462,6 +4630,35 @@ static struct bin_attribute dev_attr_reg = {
 	.read = NULL,
 	.write = tfa98xx_reg_write,
 };
+
+#ifdef CALFUNC_IN_SYSFS
+static struct device_attribute dev_attr_calibrate = {
+	.attr = {
+		.name = "calibrate",
+		.mode = S_IRUSR | S_IWUSR,
+	},
+	.show = tfa98xx_calibrate_show,
+	.store = tfa98xx_calibrate_store,
+};
+
+static struct device_attribute dev_attr_mtpex = {
+	.attr = {
+		.name = "MTPEX",
+		.mode = S_IRUSR | S_IWUSR,
+	},
+	.show = tfa98xx_mtpex_show,
+	.store = tfa98xx_mtpex_store,
+};
+
+static struct device_attribute dev_attr_re25 = {
+	.attr = {
+		.name = "re25",
+		.mode = S_IRUSR | S_IWUSR,
+	},
+	.show = tfa98xx_re25_show,
+	.store = tfa98xx_re25_store,
+};
+#endif /* CALFUNC_IN_SYSFS */
 
 struct tfa_device *tfa98xx_get_tfa_device_from_index(int index)
 {
@@ -4706,10 +4903,22 @@ static int tfa98xx_i2c_probe(struct i2c_client *i2c,
 	/* Register the sysfs files for climax backdoor access */
 	ret = device_create_bin_file(&i2c->dev, &dev_attr_rw);
 	if (ret)
-		dev_info(&i2c->dev, "error creating sysfs files\n");
+		dev_info(&i2c->dev, "error creating sysfs node, rw\n");
 	ret = device_create_bin_file(&i2c->dev, &dev_attr_reg);
 	if (ret)
-		dev_info(&i2c->dev, "error creating sysfs files\n");
+		dev_info(&i2c->dev, "error creating sysfs node, reg\n");
+
+#ifdef CALFUNC_IN_SYSFS
+	ret = device_create_file(&i2c->dev, &dev_attr_calibrate);
+	if (ret)
+		dev_info(&i2c->dev, "error creating sysfs node, calibrate\n");
+	ret = device_create_file(&i2c->dev, &dev_attr_mtpex);
+	if (ret)
+		dev_info(&i2c->dev, "error creating sysfs node, MTPEX\n");
+	ret = device_create_file(&i2c->dev, &dev_attr_re25);
+	if (ret)
+		dev_info(&i2c->dev, "error creating sysfs node, re25\n");
+#endif
 
 	pr_info("%s Probe completed successfully!\n", __func__);
 

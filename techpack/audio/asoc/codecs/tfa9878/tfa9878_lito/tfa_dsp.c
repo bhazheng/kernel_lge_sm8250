@@ -6003,8 +6003,13 @@ int tfa_ext_event_handler(struct tfa_device *tfa,
 #define UPPER_LIMIT_CAL_P_N0A 32000
 #define LOWER_LIMIT_CAL_S_N0A 0
 #define UPPER_LIMIT_CAL_S_N0A 32000
+#if defined(CONFIG_MACH_LITO_WINGLM)
+#define LOWER_LIMIT_CAL_N1A 6000
+#define UPPER_LIMIT_CAL_N1A 8000
+#else
 #define LOWER_LIMIT_CAL_N1A 0
 #define UPPER_LIMIT_CAL_N1A 32000
+#endif
 #if !defined(MPLATFORM)
 #define LOWER_LIMIT_CAL_P_N1A 6100 // Top
 #define UPPER_LIMIT_CAL_P_N1A 7400 // Top
