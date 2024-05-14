@@ -1339,6 +1339,8 @@ static int es9218p_sabre_amp_stop(struct i2c_client *client, int headset)
 }
 
 #ifdef ES9218P_SYSFS
+static int forced_headset_type = -1;
+
 static ssize_t set_forced_headset_type(struct device *dev,
                    struct device_attribute *attr,
                    const char *buf, size_t count)
@@ -1350,6 +1352,7 @@ static ssize_t set_forced_headset_type(struct device *dev,
     g_volume = 0;
     
     g_headset_type = input_val + 1;
+    forced_headset_type = input_val + 1;
 
     es9218p_sabre_bypass2hifi();
 
@@ -1362,6 +1365,8 @@ static ssize_t get_forced_headset_type(struct device *dev,
     return sprintf(buf, "%i\n", g_headset_type);
 }
 static DEVICE_ATTR(headset_type, S_IWUSR|S_IRUGO, get_forced_headset_type, set_forced_headset_type);
+
+static int forced_avc_volume = -1;
 
 static ssize_t set_forced_avc_volume(struct device *dev,
                    struct device_attribute *attr,
@@ -1376,6 +1381,7 @@ static ssize_t set_forced_avc_volume(struct device *dev,
     }
 
     g_avc_volume = input_vol;
+    forced_avc_volume = input_vol;
 
     es9218_set_avc_volume(g_es9218_priv->i2c_client, g_avc_volume);
 
