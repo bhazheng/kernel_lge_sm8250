@@ -17,7 +17,9 @@
  *                                                                   USA
  */
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 
 #include <stdio.h>
 
@@ -267,6 +269,68 @@ srcpos_string(struct srcpos *pos)
 			  pos->first_line, pos->first_column);
 
 	return pos_str;
+}
+
+static char *
+srcpos_string_comment(struct srcpos *pos, bool first_line, int level)
+{
+	char *pos_str, *fresh_fname = NULL, *first, *rest;
+	const char *fname;
+
+	if (!pos) {
+		if (level > 1) {
+			xasprintf(&pos_str, "<no-file>:<no-line>");
+			return pos_str;
+		} else {
+			return NULL;
+		}
+	}
+
+	if (!pos->file)
+		fname = "<no-file>";
+	else if (!pos->file->name)
+		fname = "<no-filename>";
+	else if (level > 1)
+		fname = pos->file->name;
+	else {
+		fresh_fname = shorten_to_initial_path(pos->file->name);
+		if (fresh_fname)
+			fname = fresh_fname;
+		else
+			fname = pos->file->name;
+	}
+
+	if (level > 1)
+		xasprintf(&first, "%s:%d:%d-%d:%d", fname,
+			  pos->first_line, pos->first_column,
+			  pos->last_line, pos->last_column);
+	else
+		xasprintf(&first, "%s:%d", fname,
+			  first_line ? pos->first_line : pos->last_line);
+
+	if (fresh_fname)
+		free(fresh_fname);
+
+	if (pos->next != NULL) {
+		rest = srcpos_string_comment(pos->next, first_line, level);
+		xasprintf(&pos_str, "%s, %s", first, rest);
+		free(first);
+		free(rest);
+	} else {
+		pos_str = first;
+	}
+
+	return pos_str;
+}
+
+char *srcpos_string_first(struct srcpos *pos, int level)
+{
+	return srcpos_string_comment(pos, true, level);
+}
+
+char *srcpos_string_last(struct srcpos *pos, int level)
+{
+	return srcpos_string_comment(pos, false, level);
 }
 
 void srcpos_verror(struct srcpos *pos, const char *prefix,

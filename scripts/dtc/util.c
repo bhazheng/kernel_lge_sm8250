@@ -47,7 +47,51 @@ char *xstrdup(const char *s)
 	return d;
 }
 
-/* based in part from (3) vsnprintf */
+char *xstrndup(const char *s, size_t n)
+{
+	size_t len = strnlen(s, n) + 1;
+	char *d = xmalloc(len);
+
+	memcpy(d, s, len - 1);
+	d[len - 1] = '\0';
+
+	return d;
+}
+
+int xavsprintf_append(char **strp, const char *fmt, va_list ap)
+{
+	int n, size = 0;	/* start with 128 bytes */
+	char *p;
+	va_list ap_copy;
+
+	p = *strp;
+	if (p)
+		size = strlen(p);
+
+	va_copy(ap_copy, ap);
+	n = vsnprintf(NULL, 0, fmt, ap_copy) + 1;
+	va_end(ap_copy);
+
+	p = xrealloc(p, size + n);
+
+	n = vsnprintf(p + size, n, fmt, ap);
+
+	*strp = p;
+	return strlen(p);
+}
+
+int xasprintf_append(char **strp, const char *fmt, ...)
+{
+	int n;
+	va_list ap;
+
+	va_start(ap, fmt);
+	n = xavsprintf_append(strp, fmt, ap);
+	va_end(ap);
+
+	return n;
+}
+
 int xasprintf(char **strp, const char *fmt, ...)
 {
 	int n, size = 128;	/* start with 128 bytes */
@@ -360,11 +404,11 @@ int utilfdt_decode_type(const char *fmt, int *type, int *size)
 	}
 
 	/* we should now have a type */
-	if ((*fmt == '\0') || !strchr("iuxs", *fmt))
+	if ((*fmt == '\0') || !strchr("iuxsr", *fmt))
 		return -1;
 
 	/* convert qualifier (bhL) to byte size */
-	if (*fmt != 's')
+	if (*fmt != 's' && *fmt != 'r')
 		*size = qualifier == 'b' ? 1 :
 				qualifier == 'h' ? 2 :
 				qualifier == 'l' ? 4 : -1;
