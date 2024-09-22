@@ -619,11 +619,11 @@ static void flat_realign(struct inbuf *inb, int align)
 		die("Premature end of data parsing flat device tree\n");
 }
 
-static const char *flat_read_string(struct inbuf *inb)
+static char *flat_read_string(struct inbuf *inb)
 {
 	int len = 0;
 	const char *p = inb->ptr;
-	const char *str;
+	char *str;
 
 	do {
 		if (p >= inb->limit)
@@ -631,7 +631,7 @@ static const char *flat_read_string(struct inbuf *inb)
 		len++;
 	} while ((*p++) != '\0');
 
-	str = inb->ptr;
+	str = xstrdup(inb->ptr);
 
 	inb->ptr += len;
 
@@ -726,7 +726,7 @@ static struct reserve_info *flat_read_mem_reserve(struct inbuf *inb)
 }
 
 
-static const char *nodename_from_path(const char *ppath, const char *cpath)
+static char *nodename_from_path(const char *ppath, const char *cpath)
 {
 	int plen;
 
@@ -740,7 +740,7 @@ static const char *nodename_from_path(const char *ppath, const char *cpath)
 	if (!streq(ppath, "/"))
 		plen++;
 
-	return cpath + plen;
+	return xstrdup(cpath + plen);
 }
 
 static struct node *unflatten_tree(struct inbuf *dtbuf,
@@ -748,7 +748,7 @@ static struct node *unflatten_tree(struct inbuf *dtbuf,
 				   const char *parent_flatname, int flags)
 {
 	struct node *node;
-	const char *flatname;
+	char *flatname;
 	uint32_t val;
 
 	node = build_node(NULL, NULL);
@@ -756,10 +756,9 @@ static struct node *unflatten_tree(struct inbuf *dtbuf,
 	flatname = flat_read_string(dtbuf);
 
 	if (flags & FTF_FULLPATH)
-		node->name = xstrdup(nodename_from_path(parent_flatname,
-							flatname));
+		node->name = nodename_from_path(parent_flatname, flatname);
 	else
-		node->name = xstrdup(flatname);
+		node->name = flatname;
 
 	do {
 		struct property *prop;
@@ -800,6 +799,10 @@ static struct node *unflatten_tree(struct inbuf *dtbuf,
 			    val);
 		}
 	} while (val != FDT_END_NODE);
+
+	if (node->name != flatname) {
+		free(flatname);
+	}
 
 	return node;
 }
