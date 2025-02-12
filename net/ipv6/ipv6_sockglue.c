@@ -228,11 +228,12 @@ static int do_ipv6_setsockopt(struct sock *sk, int level, int optname,
 				sock_prot_inuse_add(net, sk->sk_prot, -1);
 				sock_prot_inuse_add(net, &tcp_prot, 1);
 				local_bh_enable();
-				sk->sk_prot = &tcp_prot;
+                                /* Paired with READ_ONCE(sk->sk_prot) in inet6_stream_ops */
+                                WRITE_ONCE(sk->sk_prot, &tcp_prot);
 #ifdef CONFIG_LGP_DATA_TCPIP_MPTCP
 #ifdef CONFIG_MPTCP
 				if (sock_flag(sk, SOCK_MPTCP))
-					icsk->icsk_af_ops = &mptcp_v4_specific;
+					WRITE_ONCE(icsk->icsk_af_ops, &mptcp_v4_specific);
 				else
 #endif
 #endif

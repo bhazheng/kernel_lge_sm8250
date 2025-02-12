@@ -247,7 +247,7 @@ static int tcp_v6_connect(struct sock *sk, struct sockaddr *uaddr,
 #ifdef CONFIG_LGP_DATA_TCPIP_MPTCP
 #ifdef CONFIG_MPTCP
 		if (sock_flag(sk, SOCK_MPTCP))
-			icsk->icsk_af_ops = &mptcp_v6_mapped;
+			WRITE_ONCE(icsk->icsk_af_ops, &mptcp_v6_mapped);
 		else
 #endif
 #endif
@@ -266,7 +266,7 @@ static int tcp_v6_connect(struct sock *sk, struct sockaddr *uaddr,
 #ifdef CONFIG_LGP_DATA_TCPIP_MPTCP
 #ifdef CONFIG_MPTCP
 			if (sock_flag(sk, SOCK_MPTCP))
-				icsk->icsk_af_ops = &mptcp_v6_specific;
+				WRITE_ONCE(icsk->icsk_af_ops, &mptcp_v6_mapped);
 			else
 #endif
 #endif
