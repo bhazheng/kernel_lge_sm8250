@@ -187,37 +187,38 @@ out_eacces:
 
 #ifdef CONFIG_LFS_SDCARDFS
 static int sdcardfs_symlink(struct inode *dir, struct dentry *dentry,
-			  const char *symname)
+                             const char *symname)
 {
-	int err;
-	struct dentry *lower_dentry;
-	struct dentry *lower_parent_dentry = NULL;
-	struct path lower_path;
-	const struct cred *saved_cred = NULL;
+        int err;
+        struct dentry *lower_dentry;
+        struct dentry *lower_parent_dentry = NULL;
+        struct path lower_path;
+        const struct cred *saved_cred = NULL;
 
-    saved_cred = override_fsids(SDCARDFS_SB(dir->i_sb),
-            SDCARDFS_I(dir)->data);
-    if (!saved_cred)
-        return -ENOMEM;
+        saved_cred = override_fsids(SDCARDFS_SB(dir->i_sb),
+                                     SDCARDFS_I(dir)->data);
+        if (!saved_cred)
+                return -ENOMEM;
 
-	sdcardfs_get_lower_path(dentry, &lower_path);
-	lower_dentry = lower_path.dentry;
-	lower_parent_dentry = lock_parent(lower_dentry);
+        sdcardfs_get_lower_path(dentry, &lower_path);
+        lower_dentry = lower_path.dentry;
+        lower_parent_dentry = lock_parent(lower_dentry);
 
-	err = vfs_symlink(d_inode(lower_parent_dentry), lower_dentry, symname);
-	if (err)
-		goto out;
-	err = sdcardfs_interpose(dentry, dir->i_sb, &lower_path, SDCARDFS_I(dir)->data->userid);
-	if (err)
-		goto out;
-	fsstack_copy_attr_times(dir, sdcardfs_lower_inode(dir));
-	fsstack_copy_inode_size(dir, d_inode(lower_parent_dentry));
+        err = vfs_symlink(d_inode(lower_parent_dentry), lower_dentry, symname);
+        if (err)
+                goto out;
+        err = sdcardfs_interpose(dentry, dir->i_sb, &lower_path,
+                                 SDCARDFS_I(dir)->data->userid);
+        if (err)
+                goto out;
+        fsstack_copy_attr_times(dir, sdcardfs_lower_inode(dir));
+        fsstack_copy_inode_size(dir, d_inode(lower_parent_dentry));
 
 out:
-	unlock_dir(lower_parent_dentry);
-	sdcardfs_put_lower_path(dentry, &lower_path);
-    revert_fsids(saved_cred);
-	return err;
+        unlock_dir(lower_parent_dentry);
+        sdcardfs_put_lower_path(dentry, &lower_path);
+        revert_fsids(saved_cred);
+        return err;
 }
 #endif
 

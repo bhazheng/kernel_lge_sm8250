@@ -627,22 +627,23 @@ version  : 1.0
 release  : 2018.08.24
 ====================================================================================== */
 
-int a2v_seq_write(u8* data, u32 size)
+int a2v_seq_write(u8 *data, u32 size)
 {
-	/* call i2c bulk write func */
+        /* call i2c bulk write func */
 #if 0
-	if( haptic_status == false ) {
-		dw791x_seq_write(dw791x->rtp_input, 0x0, RAM_ADDR0, (u8*)data, size);
-	}
+        if (haptic_status == false) {
+                dw791x_seq_write(dw791x->rtp_input, 0x0, RAM_ADDR0,
+                                 (u8 *)data, size);
+        }
 #endif
-    int ret;
+        int ret;
 
-    if(is_immersion_haptic_on)
-        return -1;
+        if (is_immersion_haptic_on)
+                return -1;
 
-	ret = I2CWrite(DW7800_DATA, size, data);
+        ret = I2CWrite(DW7800_DATA, size, data);
 
-	return ret;
+        return ret;
 }
 EXPORT_SYMBOL(a2v_seq_write);
 
