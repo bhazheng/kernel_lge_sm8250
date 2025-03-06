@@ -768,42 +768,45 @@ static ssize_t br_offset_show(struct device *dev,
 }
 
 static ssize_t br_offset_store(struct device *dev,
-		struct device_attribute *attr, const char *buf, size_t size)
+                                struct device_attribute *attr,
+                                const char *buf, size_t size)
 {
-	ssize_t ret = strnlen(buf, PAGE_SIZE);
-	struct dsi_panel *panel;
-	int data;
-	bool connect = false;
+        ssize_t ret = strnlen(buf, PAGE_SIZE);
+        struct dsi_panel *panel;
+        int data;
+        bool connect = false;
 
-	panel = dev_get_drvdata(dev);
-	if (!panel) {
-		pr_err("panel is NULL\n");
-		return -EINVAL;
-	}
+        panel = dev_get_drvdata(dev);
+        if (!panel) {
+                pr_err("panel is NULL\n");
+                return -EINVAL;
+        }
 
-	sscanf(buf, "%d", &data);
+        sscanf(buf, "%d", &data);
 
 #if IS_ENABLED(CONFIG_LGE_DUAL_SCREEN)
-	if (is_ds_connected()) {
-		connect = true;
-	}
+        if (is_ds_connected()) {
+                connect = true;
+        }
 #endif
 
-	if (connect && (data == BR_OFFSET_BYPASS)) {
-		panel->lge.br_offset_bypass = true;
-		pr_err("enable bypass\n");
-		return ret;
-	}
+        if (connect && (data == BR_OFFSET_BYPASS)) {
+                panel->lge.br_offset_bypass = true;
+                pr_err("enable bypass\n");
+                return ret;
+        }
 
-	panel->lge.br_offset = data;
-	pr_info("request=%d\n", panel->lge.br_offset);
+        panel->lge.br_offset = data;
+        pr_info("request=%d\n", panel->lge.br_offset);
 
-    if (panel->lge.br_offset_bypass)
-        panel->lge.br_offset_bypass = false;
+        if (panel->lge.br_offset_bypass)
+                panel->lge.br_offset_bypass = false;
 
-	return ret;
+        return ret;
 }
-static DEVICE_ATTR(br_offset, S_IRUGO | S_IWUSR | S_IWGRP, br_offset_show, br_offset_store);
+
+static DEVICE_ATTR(br_offset, S_IRUGO | S_IWUSR | S_IWGRP,
+                     br_offset_show, br_offset_store);
 #endif
 
 int lge_brightness_create_sysfs(struct dsi_panel *panel,

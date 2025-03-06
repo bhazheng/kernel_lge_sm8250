@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
-/* Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
  * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #include <linux/slab.h>
@@ -31,7 +31,7 @@
 
 #if defined(CONFIG_SND_LGE_VOICE_BOKEH)
 #include <linux/extcon.h>
-#include "../../../../../kernel/msm-4.19/drivers/extcon/extcon.h"
+#include "../../../../drivers/extcon/extcon.h"
 
 //#define VOC_MUTE "voice_bokeh_status"
 #define AFE_OPCODE_LGE_VOICE_BOKEH_DET 0x10001129
@@ -12209,6 +12209,7 @@ static bool q6afe_is_afe_lsm_port(int port_id)
 	int i = 0;
 
 	for (i = 0; i < MAX_LSM_SESSIONS; i++) {
+		// pr_info("%s:: lsm_afe_ports[%d]=0x%x - port_id 0x%x\n", __func__, i, this_afe.lsm_afe_ports[i], port_id);
 		if (port_id == this_afe.lsm_afe_ports[i])
 			return true;
 	}
