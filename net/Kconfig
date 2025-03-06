@@ -97,12 +97,6 @@ config LGP_DATA_TCPIP_MPTCP
 
 endif # if INET
 
-config ANDROID_PARANOID_NETWORK
-	bool "Only allow certain groups to create sockets"
-	default y
-	help
-		none
-
 config NETWORK_SECMARK
 	bool "Security Marking"
 	help
