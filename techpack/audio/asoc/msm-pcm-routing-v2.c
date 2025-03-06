@@ -1200,66 +1200,72 @@
  EXPORT_SYMBOL(msm_pcm_routing_get_stream_app_type_cfg);
  
  static struct cal_block_data *msm_routing_find_topology_by_path(int path,
-								 int cal_index)
- {
-	 struct list_head		*ptr, *next;
-	 struct cal_block_data		*cal_block = NULL;
-	 struct audio_cal_info_adm_top *cal_info;
-	 pr_debug("%s\n", __func__);
- 
-	 list_for_each_safe(ptr, next,
-		 &cal_data[cal_index]->cal_blocks) {
- 
-		 cal_block = list_entry(ptr,
-			 struct cal_block_data, list);
- 
-		 if (cal_utils_is_cal_stale(cal_block))
-			 continue;
- 
-		 if (((struct audio_cal_info_adm_top *)cal_block
-			 ->cal_info)->path == path) {
-			 return cal_block;
-		 }
-	 }
-	 pr_debug("%s: Can't find topology for path %d\n", __func__, path);
-	 return NULL;
- }
+								int cal_index,
+								int app_type,
+								int acdb_id)
+{
+	struct list_head		*ptr, *next;
+	struct cal_block_data		*cal_block = NULL;
+	struct audio_cal_info_adm_top *cal_info;
+	pr_debug("%s\n", __func__);
+
+	list_for_each_safe(ptr, next,
+		&cal_data[cal_index]->cal_blocks) {
+
+		cal_block = list_entry(ptr,
+			struct cal_block_data, list);
+
+		if (cal_utils_is_cal_stale(cal_block))
+			continue;
+		cal_info = (struct audio_cal_info_adm_top *)
+                      	 	 cal_block->cal_info;
+		if ((cal_info->path == path)  &&
+			(cal_info->app_type == app_type) &&
+			(cal_info->acdb_id == acdb_id)) {
+			return cal_block;
+		}
+	}
+	pr_debug("%s: Can't find topology for path %d\n", __func__, path);
+	return NULL;
+}
  
  static struct cal_block_data *msm_routing_find_topology(int path,
-							 int app_type,
-							 int acdb_id,
-							 int cal_index,
-							 bool exact)
- {
-	 struct list_head *ptr, *next;
-	 struct cal_block_data *cal_block = NULL;
-	 struct audio_cal_info_adm_top *cal_info;
- 
-	 pr_debug("%s\n", __func__);
- 
-	 list_for_each_safe(ptr, next,
-		 &cal_data[cal_index]->cal_blocks) {
- 
-		 cal_block = list_entry(ptr,
-			 struct cal_block_data, list);
- 
-		 if (cal_utils_is_cal_stale(cal_block))
-			 continue;
- 
-		 cal_info = (struct audio_cal_info_adm_top *)
-			 cal_block->cal_info;
-		 if ((cal_info->path == path)  &&
-			 (cal_info->app_type == app_type) &&
-			 (cal_info->acdb_id == acdb_id)) {
-			 return cal_block;
-		 }
-	 }
-	 pr_debug("%s: Can't find topology for path %d, app %d, "
-		  "acdb_id %d %s\n",  __func__, path, app_type, acdb_id,
-		  exact ? "fail" : "defaulting to search by path");
-	 return exact ? NULL : msm_routing_find_topology_by_path(path,
-								 cal_index);
- }
+							int app_type,
+							int acdb_id,
+							int cal_index,
+							bool exact)
+{
+	struct list_head *ptr, *next;
+	struct cal_block_data *cal_block = NULL;
+	struct audio_cal_info_adm_top *cal_info;
+
+	pr_debug("%s\n", __func__);
+
+	list_for_each_safe(ptr, next,
+		&cal_data[cal_index]->cal_blocks) {
+
+		cal_block = list_entry(ptr,
+			struct cal_block_data, list);
+
+		if (cal_utils_is_cal_stale(cal_block))
+			continue;
+
+		cal_info = (struct audio_cal_info_adm_top *)
+			cal_block->cal_info;
+		if ((cal_info->path == path)  &&
+			(cal_info->app_type == app_type) &&
+			(cal_info->acdb_id == acdb_id)) {
+			return cal_block;
+		}
+	}
+	pr_debug("%s: Can't find topology for path %d, app %d, "
+		 "acdb_id %d %s\n",  __func__, path, app_type, acdb_id,
+		 exact ? "fail" : "defaulting to search by path");
+	return exact ? NULL : msm_routing_find_topology_by_path(path,
+								cal_index,
+								app_type,
+								acdb_id);
+}
  
  static int msm_routing_find_topology_on_index(int session_type, int app_type,
 						   int acdb_dev_id,  int idx,
@@ -27715,11 +27721,12 @@
 	 {"MultiMedia17 Mixer", "TX_CDC_DMA_TX_3", "TX_CDC_DMA_TX_3"},
 	 {"MultiMedia17 Mixer", "TX_CDC_DMA_TX_4", "TX_CDC_DMA_TX_4"},
 	 {"MultiMedia17 Mixer", "TX_CDC_DMA_TX_5", "TX_CDC_DMA_TX_5"},
+ #endif
 	 {"MultiMedia17 Mixer", "AFE_LOOPBACK_TX", "AFE_LOOPBACK_TX"},
  #ifdef CONFIG_MACH_LITO_WINGLM	//CONFIG_MACH_LGE
 	 {"MultiMedia17 Mixer", "USB_AUDIO_TX", "USB_AUDIO_TX"},
  #endif
-	 {"MultiMedia17 Mixer", "AFE_LOOPBACK_TX", "AFE_LOOPBACK_TX"},
+
  
  #ifndef CONFIG_CDC_DMA_DISABLE
 	 {"MultiMedia18 Mixer", "TX_CDC_DMA_TX_0", "TX_CDC_DMA_TX_0"},
