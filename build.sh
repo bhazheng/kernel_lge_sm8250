@@ -20,7 +20,7 @@ make mrproper &>> "$LOG_FILE"
 export KBUILD_BUILD_USER=nobody
 export KBUILD_BUILD_HOST=ubuntu
 
-export CLANG_PATH="$HOME/Toolchain/Clang-19/bin" # Gunakan path absolut untuk CLANG_PATH
+export CLANG_PATH="$HOME/Toolchain/Clang-21/bin" # Gunakan path absolut untuk CLANG_PATH
 export PATH="$CLANG_PATH:$PATH"
 
 # Regenerate defconfig jika diperlukan
