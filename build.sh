@@ -20,7 +20,7 @@ make mrproper &>> "$LOG_FILE"
 export KBUILD_BUILD_USER=nobody
 export KBUILD_BUILD_HOST=ubuntu
 
-export CLANG_PATH="$HOME/Clang-21/bin" # Gunakan path absolut untuk CLANG_PATH
+export CLANG_PATH="$HOME/Toolchain/Clang-19/bin" # Gunakan path absolut untuk CLANG_PATH
 export PATH="$CLANG_PATH:$PATH"
 
 # Regenerate defconfig jika diperlukan
@@ -51,5 +51,5 @@ make O=out ARCH=arm64 $DEFCONFIG &>> "$LOG_FILE"
 echo -e "\nStarting compilation...\n" | tee -a "$LOG_FILE"
 
 # Kompilasi Kernel
-make -j$(nproc) O=out ARCH=arm64 CC=clang LD=ld.lld AR=llvm-ar AS=llvm-as NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- Image.gz-dtb &>> "$LOG_FILE"
+make -j$(nproc) O=out ARCH=arm64 CC=clang LD=ld.lld AR=llvm-ar AS=llvm-as NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- CLANG_TRIPLE=aarch64-linux-gnu- Image.gz-dtb &>> "$LOG_FILE"
 
