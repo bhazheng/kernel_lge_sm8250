@@ -528,87 +528,88 @@ static ssize_t dual_role_show_property(struct device *dev,
 }
 
 static ssize_t dual_role_store_property(struct device *dev,
-					struct device_attribute *attr,
-					const char *buf, size_t count)
+                                        struct device_attribute *attr,
+                                        const char *buf, size_t count)
 {
-	ssize_t ret;
-	struct dual_role_phy_instance *dual_role = dev_get_drvdata(dev);
-	const ptrdiff_t off = attr - dual_role_attrs;
-	unsigned int value;
-	int total, i;
-	char *dup_buf, **text_array;
-	bool result = false;
+    ssize_t ret;
+    struct dual_role_phy_instance *dual_role = dev_get_drvdata(dev);
+    const ptrdiff_t off = attr - dual_role_attrs;
+    unsigned int value;
+    int total, i;
+    char *dup_buf, **text_array;
+    bool result = false;
 
-	dup_buf = kstrdupcase(buf, GFP_KERNEL, false);
-	switch (off) {
-	case DUAL_ROLE_PROP_MODE:
-		total = DUAL_ROLE_PROP_MODE_TOTAL;
-		text_array = mode_text;
-		break;
-	case DUAL_ROLE_PROP_PR:
-		total = DUAL_ROLE_PROP_PR_TOTAL;
-		text_array = pr_text;
-		break;
-	case DUAL_ROLE_PROP_DR:
-		total = DUAL_ROLE_PROP_DR_TOTAL;
-		text_array = dr_text;
-		break;
+    dup_buf = kstrdupcase(buf, GFP_KERNEL, false);
+    switch (off) {
+    case DUAL_ROLE_PROP_MODE:
+        total = DUAL_ROLE_PROP_MODE_TOTAL;
+        text_array = mode_text;
+        break;
+    case DUAL_ROLE_PROP_PR:
+        total = DUAL_ROLE_PROP_PR_TOTAL;
+        text_array = pr_text;
+        break;
+    case DUAL_ROLE_PROP_DR:
+        total = DUAL_ROLE_PROP_DR_TOTAL;
+        text_array = dr_text;
+        break;
 #ifdef CONFIG_LGE_USB
-	case DUAL_ROLE_PROP_CONTROL:
-		total = DUAL_ROLE_PROP_CC_TOTAL;
-		text_array = control_text;
-		break;
+    case DUAL_ROLE_PROP_CONTROL:
+        total = DUAL_ROLE_PROP_CC_TOTAL;
+        text_array = control_text;
+        break;
 #endif
 #ifdef CONFIG_LGE_USB_MOISTURE_DETECTION
-	case DUAL_ROLE_PROP_MOISTURE_EN:
-		total = DUAL_ROLE_PROP_MOISTURE_EN_TOTAL;
-		text_array = moisture_en_text;
-		break;
-	case DUAL_ROLE_PROP_MOISTURE_UX:
-		total = DUAL_ROLE_PROP_MOISTURE_UX_TOTAL;
-		text_array = moisture_ux_text;
-		break;
-	case DUAL_ROLE_PROP_MOISTURE_USB:
-		total = DUAL_ROLE_PROP_MOISTURE_USB_TOTAL;
-		text_array = moisture_usb_text;
-		break;
+    case DUAL_ROLE_PROP_MOISTURE_EN:
+        total = DUAL_ROLE_PROP_MOISTURE_EN_TOTAL;
+        text_array = moisture_en_text;
+        break;
+    case DUAL_ROLE_PROP_MOISTURE_UX:
+        total = DUAL_ROLE_PROP_MOISTURE_UX_TOTAL;
+        text_array = moisture_ux_text;
+        break;
+    case DUAL_ROLE_PROP_MOISTURE_USB:
+        total = DUAL_ROLE_PROP_MOISTURE_USB_TOTAL;
+        text_array = moisture_usb_text;
+        break;
 #endif
-	case DUAL_ROLE_PROP_VCONN_SUPPLY:
-		ret = strtobool(dup_buf, &result);
-		value = result;
-		if (!ret)
-			goto setprop;
-		else
-			ret = -EINVAL;
-			goto error;
-		break;
-	default:
-		ret = -EINVAL;
-		goto error;
-	}
+    case DUAL_ROLE_PROP_VCONN_SUPPLY:
+        ret = strtobool(dup_buf, &result);
+        value = result;
+        if (!ret) {
+            goto setprop;
+        } else {
+            ret = -EINVAL;
+            goto error;
+        }
+        break;
+    default:
+        ret = -EINVAL;
+        goto error;
+    }
 
-	for (i = 0; i <= total; i++) {
-		if (i == total) {
-			ret = -ENOTSUPP;
-			goto error;
-		}
-		if (!strncmp(*(text_array + i), dup_buf,
-			     strlen(*(text_array + i)))) {
-			value = i;
-			break;
-		}
-	}
+    for (i = 0; i <= total; i++) {
+        if (i == total) {
+            ret = -ENOTSUPP;
+            goto error;
+        }
+        if (!strncmp(*(text_array + i), dup_buf, strlen(*(text_array + i)))) {
+            value = i;
+            break;
+        }
+    }
 
 setprop:
-	ret = dual_role->desc->set_property(dual_role, off, &value);
+    ret = dual_role->desc->set_property(dual_role, off, &value);
 
 error:
-	kfree(dup_buf);
+    kfree(dup_buf);
 
-	if (ret < 0)
-		return ret;
+    if (ret < 0) {
+        return ret;
+    }
 
-	return count;
+    return count;
 }
 
 static umode_t dual_role_attr_is_visible(struct kobject *kobj,
