@@ -124,13 +124,6 @@ static inline bool is_type_marker(enum markertype type)
 
 extern const char *markername(enum markertype markertype);
 
-static inline bool is_type_marker(enum markertype type)
-{
-	return type >= TYPE_UINT8;
-}
-
-extern const char *markername(enum markertype markertype);
-
 struct  marker {
 	enum markertype type;
 	unsigned int offset;
