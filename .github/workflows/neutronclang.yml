@@ -97,6 +97,8 @@ jobs:
         bash nextpatch.sh
         sed -i -e 's/# CONFIG_LTO_CLANG_THIN is not set/CONFIG_LTO_CLANG_THIN=y/' arch/arm64/configs/vendor/timelm_defconfig
         sed -i -e 's/CONFIG_LTO_CLANG_FULL=y/# CONFIG_LTO_CLANG_FULL is not set/' arch/arm64/configs/vendor/timelm_defconfig
+        make clean
+        make mrproper
         export ARCH=arm64
         export SUBARCH=ARM64
         export KBUILD_BUILD_USER="bhazheng"
