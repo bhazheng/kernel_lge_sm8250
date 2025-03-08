@@ -1299,9 +1299,6 @@
 	 pr_debug("%s: fedai_id %d, session_type %d, be_id %d\n",
 			__func__, fedai_id, session_type, be_id);
  
-	 if (cal_data == NULL)
-		 goto done;
- 
 	 app_type = fe_dai_app_type_cfg[fedai_id][session_type][be_id].app_type;
 	 acdb_dev_id =
 		 fe_dai_app_type_cfg[fedai_id][session_type][be_id].acdb_dev_id;
@@ -1322,7 +1319,7 @@
 		 if (topology < 0)
 			 topology = NULL_COPP_TOPOLOGY;
 	 }
- done:
+
 	 pr_debug("%s: Using topology %d\n", __func__, topology);
 	 return topology;
  }
