@@ -21,7 +21,7 @@ on:
         required: true
       ANYKERNEL_URL:
         description: 'AnyKernel Url (leave blank if you dont want AnyKernel)'
-        default: 'https://github.com/re-noroi/anykernel3-test'
+        default: 'https://github.com/bhazheng/AnyKernel3'
         required: false
       ANYKERNEL_BRANCH:
         description: 'AnyKernel Branch (defaults to codename)'
