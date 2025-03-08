@@ -120,16 +120,7 @@ jobs:
         if [ -e "Image.gz-dtb" ]; then
           cp -f Image.gz-dtb AnyKernel3
         fi
-        if [ -e "kona.dtb" ]; then
-          cp -f kona.dtb AnyKernel3
-        fi
-        if [ -e "kona-v2.dtb" ]; then
-          cp -f kona-v2.dtb AnyKernel3
-        fi
-        if [ -e "kona-v2.1.dtb" ]; then
-          cp -f kona-v2.1.dtb AnyKernel3
-        fi
-        name=Arabella-j3s-test-${{ github.event.inputs.CODENAME }}-${{ github.run_id }}.zip
+        name=Arabella-test-${{ github.event.inputs.CODENAME }}-${{ github.run_id }}.zip
         cd AnyKernel3
         zip -q -r $name *
         mv $name ../
