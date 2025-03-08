@@ -2595,7 +2595,7 @@ static int __es9218_sabre_headphone_off(void)
         es9218_reset_gpio_L();
     }
     else{
-        if ( es9218_power_state != ESS_PS_BYPASS ||
+        if ( es9218_power_state != ESS_PS_BYPASS &&
             es9218_power_state != ESS_PS_IDLE) {
             es9218p_sabre_hifi2lpb(); // if power state indicates chip is in HiFi mode, move to Low Power Bypass
         }

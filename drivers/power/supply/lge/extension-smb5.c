@@ -448,7 +448,7 @@ static int restricted_charging_iusb(struct smb_charger* chg, int mvalue) {
 			}
 
 			if (chg->real_charger_type != POWER_SUPPLY_TYPE_USB_FLOAT
-					|| chg->real_charger_type != POWER_SUPPLY_TYPE_USB) {
+					&& chg->real_charger_type != POWER_SUPPLY_TYPE_USB) {
 				pr_info("Releasing USB_PSY_VOTER by usb type\n");
 				rc |= vote(chg->usb_icl_votable, USB_PSY_VOTER, false, 0);
 			}
