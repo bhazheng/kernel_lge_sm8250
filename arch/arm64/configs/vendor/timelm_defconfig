@@ -6549,9 +6549,3 @@ CONFIG_DEBUG_ALIGN_RODATA=y
 #
 # Tech packages
 #
-
-#
-# RmNet extensions
-#
-CONFIG_RMNET_PERF=m
-CONFIG_RMNET_SHS=m
