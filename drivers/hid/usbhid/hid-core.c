@@ -102,9 +102,8 @@ static void uevent_init_work_func(struct work_struct *work)
 
 void hid_touch_send_uevent(struct hid_device *hid, int type)
 {
-	uevent_type = type;
-	if ((hid->uevent_wq != NULL) 
-			(&hid->uevent_work != NULL)) {
+	if ((hid->uevent_wq != NULL) ||
+			(&hid->uevent_work != NULL) ) {
 		TOUCH_I("[usbhid][%s] %s\n", __func__, hid_touch_uevent_str[type][0]);
 		queue_work(hid->uevent_wq, &hid->uevent_work);
 	} else {
