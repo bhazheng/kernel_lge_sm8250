@@ -5174,18 +5174,18 @@ err_out:
 static int ext4_commit_super(struct super_block *sb, int sync)
 {
 	struct ext4_super_block *es = EXT4_SB(sb)->s_es;
-	struct buffer_head *sbh = EXT4_SB(sb)->s_sbh;
-	int error = 0;
+    struct buffer_head *sbh = EXT4_SB(sb)->s_sbh;
+    int error = 0;
 
 #ifdef CONFIG_LFS_EXT4
-	if (es && (sb->s_flags & MS_RDONLY)) {
-		if (VERITY_BLOCK(es->s_volume_name))
-		 printk("EXT4-fs : skipping %s for read only verity block(%s)\n",
-				__func__, es->s_volume_name);
-		 return error;
-	}
+    if (es && (sb->s_flags & MS_RDONLY)) {
+        if (VERITY_BLOCK(es->s_volume_name)) {
+            printk("EXT4-fs : skipping %s for read only verity block(%s)\n",
+                                __func__, es->s_volume_name);
+            return error;
+        }
+    }
 #endif
-
 	if (!sbh)
 		return -EINVAL;
 	if (block_device_ejected(sb))
