@@ -290,10 +290,10 @@ size_t fdt_header_size(const void *fdt);
  * Return: size of DTB header in bytes
  */
 size_t fdt_header_size_(uint32_t version);
-static inline size_t fdt_header_size(const void *fdt)
-{
-	return fdt_header_size_(fdt_version(fdt));
-}
+// static inline size_t fdt_header_size(const void *fdt)
+// {
+// 	return fdt_header_size_(fdt_version(fdt));
+// }
 
 /**
  * fdt_check_header - sanity check a device tree header
