@@ -15,52 +15,52 @@
  * that the given buffer contains what appears to be a flattened
  * device tree with sane information in its header.
  */
-int fdt_ro_probe_(const void *fdt)
-{
-	uint32_t totalsize = fdt_totalsize(fdt);
+ int fdt_ro_probe_(const void *fdt) {
+    uint32_t totalsize = fdt_totalsize(fdt);
 
-	if (can_assume(VALID_DTB))
-		return totalsize;
+    if (can_assume(VALID_DTB)) {
+        return totalsize;
+    }
 
-	/* The device tree must be at an 8-byte aligned address */
-	if ((uintptr_t)fdt & 7)
-		return -FDT_ERR_ALIGNMENT;
+    /* The device tree must be at an 8-byte aligned address */
+    if ((uintptr_t)fdt & 7) {
+        return -FDT_ERR_ALIGNMENT;
+    }
 
-	if (fdt_magic(fdt) == FDT_MAGIC) {
-		/* Complete tree */
-		if (!can_assume(LATEST)) {
-			if (fdt_version(fdt) < FDT_FIRST_SUPPORTED_VERSION)
-				return -FDT_ERR_BADVERSION;
-			if (fdt_last_comp_version(fdt) >
-					FDT_LAST_SUPPORTED_VERSION)
-				return -FDT_ERR_BADVERSION;
-		}
-	} else if (fdt_magic(fdt) == FDT_SW_MAGIC) {
-		/* Unfinished sequential-write blob */
-		if (!can_assume(VALID_INPUT) && fdt_size_dt_struct(fdt) == 0)
-			return -FDT_ERR_BADSTATE;
-	} else {
-		return -FDT_ERR_BADMAGIC;
-	}
+    if (fdt_magic(fdt) == FDT_MAGIC) {
+        /* Complete tree */
+        if (!can_assume(LATEST)) {
+            if (fdt_version(fdt) < FDT_FIRST_SUPPORTED_VERSION ||
+                fdt_last_comp_version(fdt) > FDT_LAST_SUPPORTED_VERSION) {
+                return -FDT_ERR_BADVERSION;
+            }
+        }
+    } else if (fdt_magic(fdt) == FDT_SW_MAGIC) {
+        /* Unfinished sequential-write blob */
+        if (!can_assume(VALID_INPUT) && fdt_size_dt_struct(fdt) == 0) {
+            return -FDT_ERR_BADSTATE;
+        }
+    } else {
+        return -FDT_ERR_BADMAGIC;
+    }
 
-	if (totalsize < INT32_MAX)
-		return totalsize;
-	else
-		return -FDT_ERR_TRUNCATED;
-}
+    if (totalsize < INT32_MAX) {
+        if (fdt_off_dt_strings(fdt) > (UINT_MAX - fdt_size_dt_strings(fdt))) {
+            return -FDT_ERR_BADOFFSET;
+        }
 
-	if (fdt_off_dt_strings(fdt) > (UINT_MAX -  fdt_size_dt_strings(fdt)))
-		return FDT_ERR_BADOFFSET;
+        if ((fdt_off_dt_struct(fdt) + fdt_size_dt_struct(fdt)) > totalsize) {
+            return -FDT_ERR_BADOFFSET;
+        }
 
-	if ((fdt_off_dt_struct(fdt) + fdt_size_dt_struct(fdt))
-	    > fdt_totalsize(fdt))
-		return FDT_ERR_BADOFFSET;
+        if ((fdt_off_dt_strings(fdt) + fdt_size_dt_strings(fdt)) > totalsize) {
+            return -FDT_ERR_BADOFFSET;
+        }
 
-	if ((fdt_off_dt_strings(fdt) + fdt_size_dt_strings(fdt))
-	    > fdt_totalsize(fdt))
-		return FDT_ERR_BADOFFSET;
-
-	return 0;
+        return totalsize;
+    } else {
+        return -FDT_ERR_TRUNCATED;
+    }
 }
 
 static int check_off_(uint32_t hdrsize, uint32_t totalsize, uint32_t off)
