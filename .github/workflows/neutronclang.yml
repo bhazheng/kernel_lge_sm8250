@@ -122,7 +122,7 @@ jobs:
         fi
         name=Arabella-test-${{ github.event.inputs.CODENAME }}-${{ github.run_id }}.zip
         cd AnyKernel3
-        zip -q -r $name *
+        zip -r9 $name * -x '*.git*' README.md *placeholder
         mv $name ../
         echo "zipname=$name" >> $GITHUB_OUTPUT
       working-directory: ${{ steps.kernel.outputs.kernel-folder }}/out/arch/arm64/boot/
