@@ -15,6 +15,14 @@ on:
         description: 'Kernel Tree Branch'
         required: true
         default: 'touch-rebase'
+      DTC_TREE:
+        description: 'Dtc Tree'
+        default: 'https://github.com/bhazheng/dtc_kernel'
+        required: true
+      DTC_TREE_BRANCH:
+        description: 'Dtc Tree Branch'
+        required: true
+        default: 'main'
       CODENAME:
         description: 'Phone Codename'
         default: 'timelm'
@@ -69,6 +77,13 @@ jobs:
       working-directory: ${{ steps.workspace.outputs.workspace-folder }}
       id: tools
 
+    - name: Clone dtc source
+      run: |
+        git clone --depth=1 ${{ github.event.inputs.DTC_TREE }} -b ${{ github.event.inputs.DTC_TREE_BRANCH }} dtc_tree
+        echo "dtc-folder=$(pwd)/dtc_tree" >> $GITHUB_OUTPUT
+      working-directory: ${{ steps.workspace.outputs.workspace-folder }}
+      id: dtc
+
     - name: Clone kernel source
       run: |
         git clone --depth=1 ${{ github.event.inputs.KERNEL_TREE }} -b ${{ github.event.inputs.KERNEL_TREE_BRANCH }} kernel_tree
@@ -80,14 +95,15 @@ jobs:
       run: |
         git submodule init && git submodule update
         bash nextpatch.sh
-        sed -i -e 's/# CONFIG_LTO_CLANG_THIN is not set/CONFIG_LTO_CLANG_THIN=y/' arch/arm64/configs/vendor/timelm-perf_defconfig
-        sed -i -e 's/CONFIG_LTO_CLANG_FULL=y/# CONFIG_LTO_CLANG_FULL is not set/' arch/arm64/configs/vendor/timelm-perf_defconfig
+        sed -i -e 's/# CONFIG_LTO_CLANG_THIN is not set/CONFIG_LTO_CLANG_THIN=y/' arch/arm64/configs/vendor/timelm_defconfig
+        sed -i -e 's/CONFIG_LTO_CLANG_FULL=y/# CONFIG_LTO_CLANG_FULL is not set/' arch/arm64/configs/vendor/timelm_defconfig
         export ARCH=arm64
         export SUBARCH=ARM64
         export KBUILD_BUILD_USER="bhazheng"
         export KBUILD_BUILD_HOST="cachy"
-        make O=out vendor/timelm-perf_defconfig PATH="${{ steps.tools.outputs.tools-folder }}/clang/bin:$PATH"
-        make O=out CC=clang -j$(nproc --all) PATH="${{ steps.tools.outputs.tools-folder }}/clang/bin:$PATH" CROSS_COMPILE=aarch64-linux-gnu- LLVM=1 LLVM_IAS=1
+        export DTC_EXT="${{ steps.dtc.outputs.dtc-folder }}/linux-x86/dtc/dtc" # Sesuaikan path DTC_EXT
+        make O=out vendor/timelm_defconfig PATH="${{ steps.tools.outputs.tools-folder }}/clang/bin:$PATH"
+        make O=out CC=clang -j$(nproc --all) PATH="${{ steps.tools.outputs.tools-folder }}/clang/bin:$PATH" CROSS_COMPILE=aarch64-linux-gnu- LLVM=1 LLVM_IAS=1 DTC="${DTC_EXT}"
         echo "elapsed_time=$(echo "$(date +%s)"-"${{ steps.workspace.outputs.start_time }}" | bc)" >> $GITHUB_OUTPUT
       working-directory: ${{ steps.kernel.outputs.kernel-folder }}
       id: build
