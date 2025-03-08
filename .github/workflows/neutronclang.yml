@@ -33,7 +33,7 @@ on:
         required: false
       ANYKERNEL_BRANCH:
         description: 'AnyKernel Branch (defaults to codename)'
-        default: 'main'
+        default: 'master'
         required: false
       UPLOAD_TO_RELEASE:
         description: 'Upload to release'
