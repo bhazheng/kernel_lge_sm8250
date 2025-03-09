@@ -7,7 +7,7 @@ set -e # Hentikan skrip jika ada perintah yang gagal
 SECONDS=0 # Timer bawaan bash
 ZIPNAME="Bhazheng-kernel-LMV600$(date '+%Y%m%d-%H%M').zip"
 AK3_DIR="$HOME/android/AnyKernel3"
-DEFCONFIG="vendor/timelm-perf_defconfig"
+DEFCONFIG="vendor/timelm_defconfig"
 LOCAL_SAVE_DIR="$HOME" # Direktori penyimpanan lokal
 LOG_FILE="$LOCAL_SAVE_DIR/build_$(date '+%Y%m%d-%H%M').log" # Nama file log
 DESKTOP_DIR="$HOME/Desktop" # Direktori Desktop
