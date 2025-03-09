@@ -690,7 +690,7 @@ err_mmu:
 int mcp_close_session(struct mcp_session *session)
 {
 	union mcp_message cmd;
-	int ret;
+	int ret = 0;
 
 	if (is_xen_domu()) {
 #ifdef TRUSTONIC_XEN_DOMU

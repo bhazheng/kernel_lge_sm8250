@@ -460,7 +460,7 @@ const void *fdt_getprop_by_offset(const void *fdt, int offset,
 	if (!prop)
 		return NULL;
 	if (namep) {
-		const char *name;
+		const char *name = NULL;
 		int namelen;
 
 		if (!can_assume(VALID_INPUT)) {

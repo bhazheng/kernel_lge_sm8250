@@ -287,7 +287,7 @@ static void dp_catalog_ctrl_update_vx_px_v420(struct dp_catalog_ctrl *ctrl,
 	struct lge_dp_display *lge_dp = get_lge_dp();
 #endif
 #if IS_ENABLED(CONFIG_LGE_DUAL_SCREEN)
-	u8 value2;
+	u8 value2 = '\0';
 #endif
 
 	if (!ctrl || !((v_level < MAX_VOLTAGE_LEVELS)

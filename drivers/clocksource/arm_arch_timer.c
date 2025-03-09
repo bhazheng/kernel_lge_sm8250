@@ -383,12 +383,6 @@ static u32 notrace sun50i_a64_read_cntv_tval_el0(void)
 	return read_sysreg(cntv_cval_el0) - sun50i_a64_read_cntvct_el0();
 }
 #endif
-#ifdef CONFIG_ARM64_ERRATUM_1188873
-static u64 notrace arm64_1188873_read_cntvct_el0(void)
-{
-	return read_sysreg(cntvct_el0);
-}
-#endif
 
 #ifdef CONFIG_ARM_ARCH_TIMER_OOL_WORKAROUND
 DEFINE_PER_CPU(const struct arch_timer_erratum_workaround *, timer_unstable_counter_workaround);
