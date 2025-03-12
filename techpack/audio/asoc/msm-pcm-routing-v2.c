@@ -1319,9 +1319,11 @@
 		 if (topology < 0)
 			 topology = NULL_COPP_TOPOLOGY;
 	 }
+
 	 pr_debug("%s: Using topology %d\n", __func__, topology);
 	 return topology;
  }
+ 
  static uint8_t is_be_dai_extproc(int be_dai)
  {
 	 if (be_dai == MSM_BACKEND_DAI_EXTPROC_RX ||
@@ -1331,70 +1333,9 @@
 	 else
 		 return 0;
  }
+ 
  static void msm_pcm_routing_build_matrix(int fedai_id, int sess_type,
-					  int path_type, int perf_mode,);
-	cal_block = msm_routing_find_topology(session_type, app_type,
-					      acdb_dev_id, idx, exact);
-	if (cal_block != NULL) {
-		topology = ((struct audio_cal_info_adm_top *)
-			    cal_block->cal_info)->topology;
-	}
-	mutex_unlock(&cal_data[idx]->lock);
-	return topology;
-}
-
-/*
- * Retrieving cal_block will mark cal_block as stale.
- * Hence it cannot be reused or resent unless the flag
- * is reset.
- */
-static int msm_routing_get_adm_topology(int fedai_id, int session_type,
-					int be_id)
-{
-	int topology = NULL_COPP_TOPOLOGY;
-	int app_type = 0, acdb_dev_id = 0;
-	bool is_afe_proxy;
-	is_afe_proxy = (be_id == MSM_BACKEND_DAI_AFE_PCM_RX);
-
-	pr_debug("%s: fedai_id %d, session_type %d, be_id %d\n",
-	       __func__, fedai_id, session_type, be_id);
-
-	app_type = fe_dai_app_type_cfg[fedai_id][session_type][be_id].app_type;
-	acdb_dev_id =
-		fe_dai_app_type_cfg[fedai_id][session_type][be_id].acdb_dev_id;
-
-	pr_debug("%s: Check for exact LSM topology\n", __func__);
-	topology = msm_routing_find_topology_on_index(session_type,
-					       app_type,
-					       acdb_dev_id,
-					       ADM_LSM_TOPOLOGY_CAL_TYPE_IDX,
-					       true /*exact*/);
-	if (topology < 0) {
-		pr_debug("%s: Check for compatible topology, exact %d\n", __func__, is_afe_proxy);
-		topology = msm_routing_find_topology_on_index(session_type,
-						      app_type,
-						      acdb_dev_id,
-						      ADM_TOPOLOGY_CAL_TYPE_IDX,
-						      is_afe_proxy /*exact*/);
-		if (topology < 0)
-			topology = NULL_COPP_TOPOLOGY;
-	}
-	pr_debug("%s: Using topology %d\n", __func__, topology);
-	return topology;
-}
-
-static uint8_t is_be_dai_extproc(int be_dai)
-{
-	if (be_dai == MSM_BACKEND_DAI_EXTPROC_RX ||
-	   be_dai == MSM_BACKEND_DAI_EXTPROC_TX ||
-	   be_dai == MSM_BACKEND_DAI_EXTPROC_EC_TX)
-		return 1;
-	else
-		return 0;
-}
-
-static void msm_pcm_routing_build_matrix(int fedai_id, int sess_type,
-					 int path_type, int perf_mode,
+					  int path_type, int perf_mode,
 					  uint32_t passthr_mode)
  {
 	 int i, port_type, j, num_copps = 0;
