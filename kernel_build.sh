@@ -25,11 +25,11 @@ export CLANG_PATH="$HOME/Toolchain/neutron-clang/bin" # Gunakan path absolut unt
 export PATH="$CLANG_PATH:$PATH"
 
 # Regenerate defconfig jika diperlukan
-if [[ $1 = "-r" || $1 = "--regen" ]]; then
-    make O=out ARCH=arm64 $DEFCONFIG savedefconfig &> "$LOG_FILE"
-    cp out/defconfig arch/arm64/configs/$DEFCONFIG &>> "$LOG_FILE"
-    exit
-fi
+# if [[ $1 = "-r" || $1 = "--regen" ]]; then
+#     make O=out ARCH=arm64 $DEFCONFIG savedefconfig &> "$LOG_FILE"
+#     cp out/defconfig arch/arm64/configs/$DEFCONFIG &>> "$LOG_FILE"
+#     exit
+# fi
 
 mkdir -p out &>> "$LOG_FILE"
 
