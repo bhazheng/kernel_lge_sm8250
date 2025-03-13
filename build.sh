@@ -17,11 +17,13 @@ make clean &>> "$LOG_FILE"
 make mrproper &>> "$LOG_FILE"
 
 # Informasi build
-export KBUILD_BUILD_USER=nobody
-export KBUILD_BUILD_HOST=ubuntu
-
-export CLANG_PATH="$HOME/Toolchain/Clang-21/bin" # Gunakan path absolut untuk CLANG_PATH
+export KBUILD_BUILD_USER=Bhazheng
+export KBUILD_BUILD_HOST=cachyos
+export ARCH=arm64
+export SUBARCH=ARM64
+export CLANG_PATH="$HOME/Toolchain/neutron-clang/bin" # Gunakan path absolut untuk CLANG_PATH
 export PATH="$CLANG_PATH:$PATH"
+export DTC_EXT="$LOCAL_SAVE_DIR/Toolchain/dtc_kernel/linux-x86/dtc/dtc" # Gunakan path absolut
 
 # Regenerate defconfig jika diperlukan
 if [[ $1 = "-r" || $1 = "--regen" ]]; then
@@ -39,17 +41,22 @@ mkdir -p out &>> "$LOG_FILE"
 # export CROSS_COMPILE_ARM32=arm-linux-gnueabi- 
 # export CLANG_TRIPLE="~/aarch64-linux-android-4.9/bin/aarch64-linux-gnu-" # Gunakan tanda kutip untuk string
 # export CLANG_TRIPLE="~/aarch64-linux-android-4.9/bin/aarch64-linux-gnu-" # Gunakan tanda kutip untuk string
-export DTC_EXT="$LOCAL_SAVE_DIR/linux-x86/dtc/dtc" # Gunakan path absolut
 
 # Konfigurasi Kernel
 # make CC=clang AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip O=out $DEFCONFIG &>> "$LOG_FILE"
 
 # Persiapan direktori output
 
-make O=out ARCH=arm64 $DEFCONFIG &>> "$LOG_FILE"
+make O=out $DEFCONFIG &>> "$LOG_FILE"
 
 echo -e "\nStarting compilation...\n" | tee -a "$LOG_FILE"
 
 # Kompilasi Kernel
-make -j$(nproc) O=out ARCH=arm64 CC=clang LD=ld.lld AR=llvm-ar AS=llvm-as NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- CLANG_TRIPLE=aarch64-linux-gnu- Image.gz-dtb &>> "$LOG_FILE"
-
+make -j$(nproc) O=out CC=clang CROSS_COMPILE=aarch64-linux-gnu- LLVM=1 LLVM_IAS=1 Image.gz-dtb &>> "$LOG_FILE"
+y
+2
+n
+n
+y
+1
+y
