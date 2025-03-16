@@ -210,7 +210,7 @@ static int msm_drm_notifier_cb(struct notifier_block *nb, unsigned long action,
 		return NOTIFY_OK;
 
 	/* Unboost when screen turns off */
-	if (*blank == MI_DRM_BLANK_UNBLANK) {
+	if (*blank == MSM_DRM_BLANK_UNBLANK) {
 		clear_bit(SCREEN_OFF, &b->state);
 	} else {
 		set_bit(SCREEN_OFF, &b->state);
@@ -235,9 +235,9 @@ static int __init cpu_input_boost_init(void)
 
 	b->msm_drm_notif.notifier_call = msm_drm_notifier_cb;
 	b->msm_drm_notif.priority = INT_MAX;
-	ret = mi_drm_register_client(&b->msm_drm_notif);
+	ret = msm_drm_register_client(&b->msm_drm_notif);
 	if (ret) {
-		pr_err("Unable to register mi_drm notifier: %d\n", ret);
+		pr_err("Unable to register msm_drm notifier: %d\n", ret);
 		goto unregister_cpu_notif;
 	}
 
@@ -251,7 +251,7 @@ static int __init cpu_input_boost_init(void)
 	return 0;
 
 unregister_fb_notif:
-	mi_drm_unregister_client(&b->msm_drm_notif);
+	msm_drm_unregister_client(&b->msm_drm_notif);
 unregister_cpu_notif:
 	cpufreq_unregister_notifier(&b->cpu_notif, CPUFREQ_POLICY_NOTIFIER);
 	return ret;
