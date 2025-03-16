@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
-* Copyright (c) 2008-2021, The Linux Foundation. All rights reserved.
-* Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
-*/
+ * Copyright (c) 2008-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ */
 
 #include <uapi/linux/sched/types.h>
 #include <linux/ctype.h>
@@ -2770,12 +2770,12 @@ static int kgsl_setup_dmabuf_useraddr(struct kgsl_device *device,
 				return PTR_ERR(dmabuf);
 			}
 			/*
-			* It is possible that the fd obtained from iterate_fd
-			* was closed before passing the fd to dma_buf_get().
-			* Hence dmabuf returned by dma_buf_get() could be
-			* different from vma->vm_file->private_data. Return
-			* failure if this happens.
-			*/
+			 * It is possible that the fd obtained from iterate_fd
+			 * was closed before passing the fd to dma_buf_get().
+			 * Hence dmabuf returned by dma_buf_get() could be
+			 * different from vma->vm_file->private_data. Return
+			 * failure if this happens.
+			 */
 			if (dmabuf != vma->vm_file->private_data) {
 				dma_buf_put(dmabuf);
 				up_read(&current->mm->mmap_sem);

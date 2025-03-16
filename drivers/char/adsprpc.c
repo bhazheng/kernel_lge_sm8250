@@ -910,9 +910,9 @@ static void fastrpc_mmap_free(struct fastrpc_mmap *map, uint32_t flags)
 		if (map->refs)
 			map->refs--;
 		/* flags is passed as 1 during fastrpc_file_free
-		* (ie process exit), so that maps will be cleared
-		* even though references are present.
-		*/
+		 * (ie process exit), so that maps will be cleared
+		 * even though references are present.
+		 */
 		if (!map->refs && !map->ctx_refs && !map->dma_handle_refs)
 			hlist_del_init(&map->hn);
 		if (map->refs > 0 && !flags)
@@ -1902,9 +1902,9 @@ static int get_args(uint32_t kernel, struct smq_invoke_ctx *ctx)
 	}
 	PERF_END);
 	/* Since we are not holidng map_mutex during get args whole time
-	* it is possible that dma handle map may be removed by some invalid
-	* fd passed by DSP. Inside the lock check if the map present or not
-	*/
+	 * it is possible that dma handle map may be removed by some invalid
+	 * fd passed by DSP. Inside the lock check if the map present or not
+	 */
 	mutex_lock(&ctx->fl->map_mutex);
 	for (i = bufs; i < bufs + handles; ++i) {
 		struct fastrpc_mmap *mmap = NULL;
@@ -4197,7 +4197,7 @@ static int fastrpc_channel_open(struct fastrpc_file *fl)
 
 	mutex_lock(&me->channel[cid].smd_mutex);
 	if (me->channel[cid].ssrcount !=
-				me->channel[cid].prevssrcount) {
+				 me->channel[cid].prevssrcount) {
 		if (me->channel[cid].subsystemstate != SUBSYSTEM_UP) {
 			err = -ENOTCONN;
 			mutex_unlock(&me->channel[cid].smd_mutex);

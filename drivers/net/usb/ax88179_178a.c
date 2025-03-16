@@ -1180,8 +1180,98 @@ const struct driver_info ax88179_info = {
 	.link_reset = ax88179_link_reset,
 	.rx_fixup = ax88179_rx_fixup,
 	.tx_fixup = ax88179_tx_fixup,
-	.system_suspend = ax88179_system_suspend,
-	.system_resume = ax88179_system_resume,
-	.napi_weight = AX88179_NAPI_WEIGHT,
-	.buf_rx_size = AX88179_BUF_RX_SIZE,
 };
+
+static const struct driver_info samsung_info = {
+	.description = "Samsung USB Ethernet Adapter",
+	.bind = ax88179_bind,
+	.unbind = ax88179_unbind,
+	.status = ax88179_status,
+	.link_reset = ax88179_link_reset,
+	.reset = ax88179_reset,
+	.stop = ax88179_stop,
+	.flags = FLAG_ETHER | FLAG_FRAMING_AX,
+	.rx_fixup = ax88179_rx_fixup,
+	.tx_fixup = ax88179_tx_fixup,
+};
+
+static const struct driver_info lenovo_info = {
+	.description = "Lenovo OneLinkDock Gigabit LAN",
+	.bind = ax88179_bind,
+	.unbind = ax88179_unbind,
+	.status = ax88179_status,
+	.link_reset = ax88179_link_reset,
+	.reset = ax88179_reset,
+	.stop = ax88179_stop,
+	.flags = FLAG_ETHER | FLAG_FRAMING_AX,
+	.rx_fixup = ax88179_rx_fixup,
+	.tx_fixup = ax88179_tx_fixup,
+};
+
+static const struct driver_info belkin_info = {
+	.description = "Belkin USB Ethernet Adapter",
+	.bind	= ax88179_bind,
+	.unbind = ax88179_unbind,
+	.status = ax88179_status,
+	.link_reset = ax88179_link_reset,
+	.reset	= ax88179_reset,
+	.stop	= ax88179_stop,
+	.flags	= FLAG_ETHER | FLAG_FRAMING_AX,
+	.rx_fixup = ax88179_rx_fixup,
+	.tx_fixup = ax88179_tx_fixup,
+};
+
+static const struct usb_device_id products[] = {
+{
+	/* ASIX AX88179 10/100/1000 */
+	USB_DEVICE(0x0b95, 0x1790),
+	.driver_info = (unsigned long)&ax88179_info,
+}, {
+	/* ASIX AX88178A 10/100/1000 */
+	USB_DEVICE(0x0b95, 0x178a),
+	.driver_info = (unsigned long)&ax88178a_info,
+}, {
+	/* Cypress GX3 SuperSpeed to Gigabit Ethernet Bridge Controller */
+	USB_DEVICE(0x04b4, 0x3610),
+	.driver_info = (unsigned long)&cypress_GX3_info,
+}, {
+	/* D-Link DUB-1312 USB 3.0 to Gigabit Ethernet Adapter */
+	USB_DEVICE(0x2001, 0x4a00),
+	.driver_info = (unsigned long)&dlink_dub1312_info,
+}, {
+	/* Sitecom USB 3.0 to Gigabit Adapter */
+	USB_DEVICE(0x0df6, 0x0072),
+	.driver_info = (unsigned long)&sitecom_info,
+}, {
+	/* Samsung USB Ethernet Adapter */
+	USB_DEVICE(0x04e8, 0xa100),
+	.driver_info = (unsigned long)&samsung_info,
+}, {
+	/* Lenovo OneLinkDock Gigabit LAN */
+	USB_DEVICE(0x17ef, 0x304b),
+	.driver_info = (unsigned long)&lenovo_info,
+}, {
+	/* Belkin B2B128 USB 3.0 Hub + Gigabit Ethernet Adapter */
+	USB_DEVICE(0x050d, 0x0128),
+	.driver_info = (unsigned long)&belkin_info,
+},
+	{ },
+};
+MODULE_DEVICE_TABLE(usb, products);
+
+static struct usb_driver ax88179_178a_driver = {
+	.name =		"ax88179_178a",
+	.id_table =	products,
+	.probe =	usbnet_probe,
+	.suspend =	ax88179_suspend,
+	.resume =	ax88179_resume,
+	.reset_resume =	ax88179_resume,
+	.disconnect =	usbnet_disconnect,
+	.supports_autosuspend = 1,
+	.disable_hub_initiated_lpm = 1,
+};
+
+module_usb_driver(ax88179_178a_driver);
+
+MODULE_DESCRIPTION("ASIX AX88179/178A based USB 3.0/2.0 Gigabit Ethernet Devices");
+MODULE_LICENSE("GPL");
