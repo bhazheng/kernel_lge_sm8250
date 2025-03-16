@@ -2733,7 +2733,10 @@ static int cnss_probe(struct platform_device *plat_dev)
 	plat_priv->plat_dev = plat_dev;
 	plat_priv->device_id = device_id->driver_data;
 	plat_priv->bus_type = cnss_get_bus_type(plat_priv->device_id);
-	plat_priv->use_nv_mac = cnss_use_nv_mac(plat_priv);
+	if (disable_nv_mac)
+		plat_priv->use_nv_mac = false;
+	else
+		plat_priv->use_nv_mac = cnss_use_nv_mac(plat_priv);
 	if (cnss_get_cal_duration(plat_priv) != 0)
 		plat_priv->cal_duration = CNSS_INVALID_CAL_DURATION;
 

@@ -503,11 +503,11 @@ static long dma_buf_ioctl_compat(struct file *file, unsigned int cmd,
 #endif
 
 static const struct file_operations dma_buf_fops = {
-	.release = dma_buf_file_release,
-	.mmap = dma_buf_mmap_internal,
-	.llseek = dma_buf_llseek,
-	.poll = dma_buf_poll,
-	.unlocked_ioctl = dma_buf_ioctl,
+	.release	= dma_buf_file_release,
+	.mmap		= dma_buf_mmap_internal,
+	.llseek		= dma_buf_llseek,
+	.poll		= dma_buf_poll,
+	.unlocked_ioctl	= dma_buf_ioctl,
 #ifdef CONFIG_COMPAT
 	.compat_ioctl = dma_buf_ioctl_compat,
 #endif
