@@ -95,6 +95,7 @@
 #include <linux/thread_info.h>
 #include <linux/cpufreq_times.h>
 #include <linux/scs.h>
+#include <linux/devfreq_boost.h>
 
 #include <asm/pgtable.h>
 #include <asm/pgalloc.h>
@@ -2362,6 +2363,10 @@ long _do_fork(unsigned long clone_flags,
 	int trace = 0;
 	long nr;
 
+	if (task_is_zygote(current)) {
+		devfreq_boost_kick_max(DEVFREQ_CPU_LLCC_DDR_BW, 150);
+	}
+
 	/*
 	 * Determine whether and which event to report to ptracer.  When
 	 * called from kernel_thread or CLONE_UNTRACED is explicitly
@@ -2386,8 +2391,6 @@ long _do_fork(unsigned long clone_flags,
 
 	if (IS_ERR(p))
 		return PTR_ERR(p);
-
-	cpufreq_task_times_alloc(p);
 
 	/*
 	 * Do this prior waking up the new thread - the thread pointer
