@@ -463,7 +463,7 @@ static int teo_select(struct cpuidle_driver *drv, struct cpuidle_device *dev,
 	 * candidate state, a shallower one needs to be found.
 	 */
 	if (drv->states[idx].target_residency_ns > duration_ns) {
-		i = teo_find_shallower_state(drv, dev, idx, duration_ns);
+		i = teo_find_shallower_state(drv, dev, idx, duration_ns, false);
 		if (teo_state_ok(i, drv))
 			idx = i;
 	}
