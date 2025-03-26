@@ -334,20 +334,23 @@ static inline int pm_qos_set_value_for_cpus(struct pm_qos_constraints *c,
 	return 0;
 }
 
-/**
- * pm_qos_update_target - manages the constraints list and calls the notifiers
- *  if needed
- * @c: constraints data struct
- * @node: request to add to the list, to update or to remove
- * @action: action to take on the constraints list
- * @value: value of the request to add or update
- *
- * This function returns 1 if the aggregated constraint value has changed, 0
- *  otherwise.
- */
-int pm_qos_update_target(struct pm_qos_constraints *c, struct plist_node *node,
-			 enum pm_qos_req_action action, int value, bool dev_req)
+	for_each_cpu(cpu, to_cpumask(&new_req_cpus)) {
+		if (c->target_per_cpu[cpu] != PM_QOS_CPU_DMA_LAT_DEFAULT_VALUE) {
+			c->target_per_cpu[cpu] = PM_QOS_CPU_DMA_LAT_DEFAULT_VALUE;
+			*cpus |= BIT(cpu);
+		}
+	}
+
+	return 0;
+}
+
+static int pm_qos_update_target_cpus(struct pm_qos_constraints *c,
+				     struct plist_node *node,
+				     enum pm_qos_req_action action, int value,
+				     bool dev_req,
+				     unsigned long new_cpus)
 {
+	struct pm_qos_request *req = container_of(node, typeof(*req), node);
 	int prev_value, curr_value, new_value;
 	unsigned long cpus = 0;
 	int ret;
