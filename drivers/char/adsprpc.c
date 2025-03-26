@@ -4389,6 +4389,10 @@ static int fastrpc_internal_control(struct fastrpc_file *fl,
 					struct fastrpc_ioctl_control *cp)
 {
 	int err = 0;
+	unsigned int latency;
+	cpumask_t mask;
+	struct fastrpc_apps *me = &gfa;
+	u32 len = me->silvercores.corecount, i = 0;
 
 	VERIFY(err, !IS_ERR_OR_NULL(fl) && !IS_ERR_OR_NULL(fl->apps));
 	if (err)
@@ -4404,9 +4408,9 @@ static int fastrpc_internal_control(struct fastrpc_file *fl,
 		VERIFY(err, latency != 0);
 		if (err)
 			goto bail;
-		cpumask_clear(&mask);
+		fl->pm_qos_req.cpus_affine = 0;
 		for (i = 0; i < len; i++)
-			cpumask_set_cpu(me->silvercores.coreno[i], &mask);
+			fl->pm_qos_req.cpus_affine |= BIT(me->silvercores.coreno[i]);
 		fl->pm_qos_req.type = PM_QOS_REQ_AFFINE_CORES;
 		cpumask_copy(&fl->pm_qos_req.cpus_affine, &mask);
 
@@ -5203,7 +5207,7 @@ static void init_qos_cores_list(struct device *dev, char *prop_name,
 		goto bail;
 	len /= sizeof(u32);
 	VERIFY(err, NULL != (coreslist = kcalloc(len, sizeof(u32),
-						GFP_KERNEL)));
+						 GFP_KERNEL)));
 	if (err)
 		goto bail;
 	for (i = 0; i < len; i++) {
@@ -5211,7 +5215,7 @@ static void init_qos_cores_list(struct device *dev, char *prop_name,
 								&coreslist[i]);
 		if (err) {
 			pr_err("adsprpc: %s: failed to read QOS cores list\n",
-								__func__);
+								 __func__);
 			goto bail;
 		}
 	}
