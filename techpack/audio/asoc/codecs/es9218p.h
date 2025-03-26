@@ -280,14 +280,14 @@ enum sabre_filter_shape {
     SABRE_FILTER_BRICKWALL
 };
 
-enum sabre_filter_symmetry {
-    SABRE_FILTER_SYMMETRY_SINE, // 0
-    SABRE_FILTER_SYMMETRY_COSINE // 1
+enum sablre_filter_symmetry{
+    SABRE_FILTER_SYMMETRY_SINE,
+    SABRE_FILTER_SYMMETRY_COSINE
 };
 
 struct sabre_custom_filter {
     enum    sabre_filter_shape      shape;      ///< roll-off shape of filter
-    enum    sabre_filter_symmetry   symmetry;   ///< symmetry type of stage 2 filter coefficients
+    enum    sablre_filter_symmetry  symmetry;   ///< symmetry type of stage 2 filter coefficients
     int     stage1_coeff[128];
     int     stage2_coeff[16];
 };
@@ -398,4 +398,3 @@ struct sabre_custom_filter es9218_sabre_custom_ft[] = {
 
 
 #endif  /* End of   __ES9218P_H__   */
-
