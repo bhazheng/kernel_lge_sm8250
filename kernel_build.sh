@@ -21,9 +21,9 @@ export KBUILD_BUILD_USER=Bhazheng
 export KBUILD_BUILD_HOST=cachyos
 export ARCH=arm64
 export SUBARCH=ARM64
-export CLANG_PATH="$HOME/Toolchain/r547379/bin" # Gunakan path absolut untuk CLANG_PATH
+export CLANG_PATH="$HOME/Toolchain/neutron-clang/bin" # Gunakan path absolut untuk CLANG_PATH
 export PATH="$CLANG_PATH:$PATH"
-export DTC_EXT="$LOCAL_SAVE_DIR/Toolchain/dtc_kernel/linux-x86/dtc/dtc" # Gunakan path absolut
+# export DTC_EXT="$LOCAL_SAVE_DIR/Toolchain/dtc_kernel/linux-x86/dtc/dtc" # Gunakan path absolut
 
 # Regenerate defconfig jika diperlukan
 if [[ $1 = "-r" || $1 = "--regen" ]]; then
@@ -52,4 +52,4 @@ make O=out $DEFCONFIG &>> "$LOG_FILE"
 echo -e "\nStarting compilation...\n" | tee -a "$LOG_FILE"
 
 # Kompilasi Kernel
-make -j$(nproc) O=out CC=clang CROSS_COMPILE=aarch64-linux-gnu- LLVM=1 LLVM_IAS=1 Image.gz-dtb &>> "$LOG_FILE"
+make -j$(nproc) O=out CC=clang CROSS_COMPILE=aarch64-linux-gnu- LLVM=1 LLVM_IAS=1 &>> "$LOG_FILE"
