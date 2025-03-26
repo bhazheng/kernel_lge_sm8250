@@ -4399,6 +4399,26 @@ static int fastrpc_internal_control(struct fastrpc_file *fl,
 
 	switch (cp->req) {
 	case FASTRPC_CONTROL_LATENCY:
+		latency = cp->lp.enable == FASTRPC_LATENCY_CTRL_ENB ?
+			fl->apps->latency : PM_QOS_DEFAULT_VALUE;
+		VERIFY(err, latency != 0);
+		if (err)
+			goto bail;
+		cpumask_clear(&mask);
+		for (i = 0; i < len; i++)
+			cpumask_set_cpu(me->silvercores.coreno[i], &mask);
+		fl->pm_qos_req.type = PM_QOS_REQ_AFFINE_CORES;
+		cpumask_copy(&fl->pm_qos_req.cpus_affine, &mask);
+
+		mutex_lock(&fl->pm_qos_mutex);
+		if (!fl->qos_request) {
+			pm_qos_add_request(&fl->pm_qos_req,
+				PM_QOS_CPU_DMA_LATENCY, latency);
+			fl->qos_request = 1;
+		} else
+			pm_qos_update_request(&fl->pm_qos_req, latency);
+		mutex_unlock(&fl->pm_qos_mutex);
+
 		/* Ensure CPU feature map updated to DSP for early WakeUp */
 		fastrpc_send_cpuinfo_to_dsp(fl);
 		break;
