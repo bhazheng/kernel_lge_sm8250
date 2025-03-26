@@ -571,19 +571,29 @@ static void pm_qos_irq_release(struct kref *ref)
 }
 
 static void pm_qos_irq_notify(struct irq_affinity_notify *notify,
-		const cpumask_t *mask)
+		const cpumask_t *unused_mask)
 {
 	unsigned long flags;
 	struct pm_qos_request *req = container_of(notify,
 					struct pm_qos_request, irq_notify);
 	struct pm_qos_constraints *c =
 				pm_qos_array[req->pm_qos_class]->constraints;
+	struct irq_desc *desc = irq_to_desc(req->irq);
+	struct cpumask *new_affinity =
+			irq_data_get_effective_affinity_mask(&desc->irq_data);
+	bool affinity_changed = false;
 
 	spin_lock_irqsave(&pm_qos_lock, flags);
-	cpumask_copy(&req->cpus_affine, mask);
+	if (!cpumask_equal(&req->cpus_affine, new_affinity)) {
+		cpumask_copy(&req->cpus_affine, new_affinity);
+		affinity_changed = true;
+	}
+
 	spin_unlock_irqrestore(&pm_qos_lock, flags);
 
-	pm_qos_update_target(c, &req->node, PM_QOS_UPDATE_REQ, req->node.prio, false);
+	if (affinity_changed)
+		pm_qos_update_target(c, &req->node, PM_QOS_UPDATE_REQ,
+				     req->node.prio, false);
 }
 #endif
 
@@ -632,7 +642,7 @@ void pm_qos_add_request(struct pm_qos_request *req,
 			mask = desc->irq_data.common->affinity;
 
 			/* Get the current affinity */
-			cpumask_copy(&req->cpus_affine, mask);
+			req->cpus_affine = *cpumask_bits(mask);
 			req->irq_notify.irq = req->irq;
 			req->irq_notify.notify = pm_qos_irq_notify;
 			req->irq_notify.release = pm_qos_irq_release;
