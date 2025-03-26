@@ -1,16 +1,16 @@
 /*
- *  ES9218P Device Driver.
- *
- *  This program is device driver for ES9218P chip set.
- *  The ES9218P is a high-performance 32-bit, 2-channel audio SABRE HiFi D/A converter
- *  with headphone amplifier, analog volume control and output switch designed for
- *  audiophile-grade portable application such as mobile phones and digital music player,
- *  consumer applications such as USB DACs and A/V receivers, as well as professional
- *  such as mixer consoles and digital audio workstations.
- *
- *  Copyright (C) 2016, ESS Technology International Ltd.
- *
- */
+*  ES9218P Device Driver.
+*
+*  This program is device driver for ES9218P chip set.
+*  The ES9218P is a high-performance 32-bit, 2-channel audio SABRE HiFi D/A converter
+*  with headphone amplifier, analog volume control and output switch designed for
+*  audiophile-grade portable application such as mobile phones and digital music player,
+*  consumer applications such as USB DACs and A/V receivers, as well as professional
+*  such as mixer consoles and digital audio workstations.
+*
+*  Copyright (C) 2016, ESS Technology International Ltd.
+*
+*/
 
 
 #ifndef __ES9218P_H__
@@ -280,9 +280,9 @@ enum sabre_filter_shape {
     SABRE_FILTER_BRICKWALL
 };
 
-enum sablre_filter_symmetry{
-    SABRE_FILTER_SYMMETRY_SINE,
-    SABRE_FILTER_SYMMETRY_COSINE
+enum sabre_filter_symmetry {
+    SABRE_FILTER_SYMMETRY_SINE, // 0
+    SABRE_FILTER_SYMMETRY_COSINE // 1
 };
 
 struct sabre_custom_filter {
@@ -293,7 +293,7 @@ struct sabre_custom_filter {
 };
 
 struct sabre_custom_filter es9218_sabre_custom_ft[] = {
-  {
+{
     SABRE_FILTER_FASTROLLOFF,       // custom filter type
     SABRE_FILTER_SYMMETRY_COSINE,   // symmetry type of stage 2 filter
     { // Stage 1 filter coefficients
@@ -320,8 +320,8 @@ struct sabre_custom_filter es9218_sabre_custom_ft[] = {
         601886,     1056422,    1624172,    2218368,    2720371,    3007535,    0,          0
 
     }
-  }, //custom filter 1
-  {
+}, //custom filter 1
+{
     SABRE_FILTER_SLOWROLLOFF,       // custom filter type
     SABRE_FILTER_SYMMETRY_COSINE,   // symmetry type of stage 2 filter
     { // Stage 1 filter coefficients
@@ -339,8 +339,8 @@ struct sabre_custom_filter es9218_sabre_custom_ft[] = {
         6927430,    6927430,    0,          0,          0,          0,          0,          0,
         0,          0,          0,          0,          0,          0,          0,          0
     }
-  }, //custom filter 2
-  {
+}, //custom filter 2
+{
     SABRE_FILTER_FASTROLLOFF,       // custom filter type
     SABRE_FILTER_SYMMETRY_SINE,     // symmetry type of stage 2 filter
     { // Stage 1 filter coefficients
@@ -366,8 +366,8 @@ struct sabre_custom_filter es9218_sabre_custom_ft[] = {
         0,          0,          0,          8997,       47076,      154163,     392557,     819728,
         1472724,    2329930,    3284770,    4177061,    4814439,    5043562,    0,          0
     }
-  }, //custom filter 3
-  {
+}, //custom filter 3
+{
     SABRE_FILTER_FASTROLLOFF,       // custom filter type
     SABRE_FILTER_SYMMETRY_SINE,     // symmetry type of stage 2 filter
     { // Stage 1 filter coefficients
@@ -393,7 +393,7 @@ struct sabre_custom_filter es9218_sabre_custom_ft[] = {
         0,          0,          0,          0,          0,          0,          99386,      355200,
         880080,     1746102,    2801046,    3902774,    4736866,    5017414,    0,          0
     }
-  } //custom filter 1
+} //custom filter 1
 };
 
 
