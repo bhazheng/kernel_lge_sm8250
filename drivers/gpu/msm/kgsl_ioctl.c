@@ -163,8 +163,7 @@ long kgsl_ioctl_helper(struct file *filep, unsigned int cmd, unsigned long arg,
 	return ret;
 }
 
-static long __kgsl_ioctl(struct file *filep, unsigned int cmd,
-			 unsigned long arg)
+long kgsl_ioctl(struct file *filep, unsigned int cmd, unsigned long arg)
 {
 	struct kgsl_device_private *dev_priv = filep->private_data;
 	struct kgsl_device *device = dev_priv->device;
