@@ -506,9 +506,9 @@ regular_page:
 	return 0;
 }
 
-static const struct mm_walk_ops cold_walk_ops = {
-	.pmd_entry = madvise_cold_or_pageout_pte_range,
-};
+// static const struct mm_walk_ops cold_walk_ops = {
+// 	.pmd_entry = madvise_cold_or_pageout_pte_range,
+// };
 
 static void madvise_cold_page_range(struct mmu_gather *tlb,
 			     struct vm_area_struct *vma,
