@@ -57,15 +57,11 @@
 int sysctl_panic_on_oom =
 IS_ENABLED(CONFIG_DEBUG_PANIC_ON_OOM) ? 2 : 0;
 int sysctl_oom_kill_allocating_task;
-<<<<<<< HEAD
 int sysctl_oom_dump_tasks = 1;
 int sysctl_reap_mem_on_sigkill = 1;
 
 static int panic_on_adj_zero;
 module_param(panic_on_adj_zero, int, 0644);
-=======
-int sysctl_oom_dump_tasks;
->>>>>>> f89392769e030 (Revert "mm: oom_kill: reap memory of a task that receives SIGKILL")
 
 /*
  * Serializes oom killer invocations (out_of_memory()) from all contexts to
@@ -711,10 +707,6 @@ static inline void wake_oom_reaper(struct task_struct *tsk)
  */
 static void mark_oom_victim(struct task_struct *tsk)
 {
-<<<<<<< HEAD
-	const struct cred *cred;
-=======
->>>>>>> f89392769e030 (Revert "mm: oom_kill: reap memory of a task that receives SIGKILL")
 	struct mm_struct *mm = tsk->mm;
 
 	WARN_ON(oom_killer_disabled);
