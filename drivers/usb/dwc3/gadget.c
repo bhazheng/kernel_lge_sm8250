@@ -2246,46 +2246,12 @@ static int dwc3_gadget_set_selfpowered(struct usb_gadget *g,
  */
 static int dwc3_device_core_soft_reset(struct dwc3 *dwc)
 {
-	u32             reg;
-	int             retries = 10;
+	u32			reg;
+	u32			timeout = 2000;
 
-	reg = dwc3_readl(dwc->regs, DWC3_DCTL);
-	reg |= DWC3_DCTL_CSFTRST;
-	dwc3_writel(dwc->regs, DWC3_DCTL, reg);
+	if (pm_runtime_suspended(dwc->dev))
+		return 0;
 
-	do {
-		reg = dwc3_readl(dwc->regs, DWC3_DCTL);
-		if (!(reg & DWC3_DCTL_CSFTRST))
-			goto done;
-
-		usleep_range(1000, 1100);
-	} while (--retries);
-
-	dev_err(dwc->dev, "%s timedout\n", __func__);
-
-	return -ETIMEDOUT;
-
-done:
-	/* phy sync delay as per data book */
-	msleep(50);
-
-	/*
-	 * Soft reset clears the block on the doorbell,
-	 * set it back to prevent unwanted writes to the doorbell.
-	 */
-	dwc3_notify_event(dwc, DWC3_CONTROLLER_NOTIFY_CLEAR_DB, 0);
-
-	return 0;
-}
-
-#define MIN_RUN_STOP_DELAY_MS 50
-
-static int dwc3_gadget_run_stop(struct dwc3 *dwc, int is_on, int suspend)
-{
-	u32			reg, reg1;
-	u32			timeout = 1500;
-
-	dbg_event(0xFF, "run_stop", is_on);
 	reg = dwc3_readl(dwc->regs, DWC3_DCTL);
 	if (is_on) {
 		if (dwc->revision <= DWC3_REVISION_187A) {
@@ -2359,101 +2325,9 @@ static int dwc3_gadget_run_stop(struct dwc3 *dwc, int is_on, int suspend)
 		reg &= DWC3_DSTS_DEVCTRLHLT;
 	} while (--timeout && !(!is_on ^ !reg));
 
-	if (!timeout) {
-		dev_err(dwc->dev, "failed to %s controller\n",
-				is_on ? "start" : "stop");
-		if (is_on)
-			dbg_event(0xFF, "STARTTOUT", reg);
-		else
-			dbg_event(0xFF, "STOPTOUT", reg);
+	if (!timeout)
 		return -ETIMEDOUT;
-	}
-#ifdef CONFIG_LGE_USB_FACTORY
-	if ((lge_get_boot_mode() == LGE_BOOT_MODE_QEM_130K) ||
-		(lge_get_boot_mode() == LGE_BOOT_MODE_PIF_130K)) {
-		reg = dwc3_readl(dwc->regs, DWC3_DCFG);
-		reg &= ~(DWC3_DCFG_SPEED_MASK);
-		reg |= DWC3_DCFG_FULLSPEED;
-		dwc3_writel(dwc->regs, DWC3_DCFG, reg);
-	}
-#endif
 
-	return 0;
-}
-
-static int dwc3_gadget_run_stop_util(struct dwc3 *dwc)
-{
-	int ret = 0;
-
-	dev_dbg(dwc->dev, "%s: enter: %d\n", __func__, dwc->gadget_state);
-	switch (dwc->gadget_state) {
-	case DWC3_GADGET_INACTIVE:
-		if (dwc->vbus_active && dwc->softconnect) {
-			ret = dwc3_gadget_run_stop(dwc, true, false);
-			dwc->gadget_state = DWC3_GADGET_ACTIVE;
-			break;
-		}
-
-		if (dwc->vbus_active) {
-			dwc->gadget_state = DWC3_GADGET_CABLE_CONN;
-			break;
-		}
-
-		if (dwc->softconnect) {
-			dwc->gadget_state = DWC3_GADGET_SOFT_CONN;
-			break;
-		}
-	case DWC3_GADGET_SOFT_CONN:
-		if (!dwc->softconnect) {
-			dwc->gadget_state = DWC3_GADGET_INACTIVE;
-			break;
-		}
-
-		if (dwc->vbus_active) {
-			ret = dwc3_gadget_run_stop(dwc, true, false);
-			dwc->gadget_state = DWC3_GADGET_ACTIVE;
-		}
-		break;
-	case DWC3_GADGET_CABLE_CONN:
-		if (!dwc->vbus_active) {
-			dwc->gadget_state = DWC3_GADGET_INACTIVE;
-			break;
-		}
-
-		if (dwc->softconnect) {
-			ret = dwc3_gadget_run_stop(dwc, true, false);
-			dwc->gadget_state = DWC3_GADGET_ACTIVE;
-		}
-		break;
-	case DWC3_GADGET_ACTIVE:
-		if (!dwc->vbus_active) {
-			dwc->gadget_state = DWC3_GADGET_SOFT_CONN;
-			ret = dwc3_gadget_run_stop(dwc, false, false);
-			break;
-		}
-
-		if (!dwc->softconnect) {
-			dwc->gadget_state = DWC3_GADGET_CABLE_CONN;
-			ret = dwc3_gadget_run_stop(dwc, false, false);
-			break;
-		}
-		break;
-	default:
-		dev_err(dwc->dev, "Invalid state\n");
-	}
-
-	dev_dbg(dwc->dev, "%s: exit: %d\n", __func__, dwc->gadget_state);
-	return ret;
-}
-
-static int dwc3_gadget_vbus_draw(struct usb_gadget *g, unsigned int mA)
-{
-	struct dwc3		*dwc = gadget_to_dwc(g);
-
-	dwc->vbus_draw = mA;
-	dev_dbg(dwc->dev, "Notify controller from %s. mA = %u\n", __func__, mA);
-	dbg_event(0xFF, "currentDraw", mA);
-	dwc3_notify_event(dwc, DWC3_CONTROLLER_SET_CURRENT_DRAW_EVENT, 0);
 	return 0;
 }
 
