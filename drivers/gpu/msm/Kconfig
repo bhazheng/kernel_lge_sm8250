@@ -6,6 +6,7 @@ config QCOM_KGSL
 	select GENERIC_ALLOCATOR
 	select FW_LOADER
 	select PM_DEVFREQ
+	select TRACE_GPU_MEM
 	select QCOM_SCM
 	select DEVFREQ_GOV_SIMPLE_ONDEMAND
 	select DEVFREQ_GOV_PERFORMANCE
@@ -26,3 +27,7 @@ config QCOM_ADRENO_DEFAULT_GOVERNOR
 config QCOM_KGSL_IOMMU
 	bool
 	default y if QCOM_KGSL && (MSM_IOMMU || ARM_SMMU)
+
+config CORESIGHT_ADRENO
+	bool
+	default y if QCOM_KGSL=y && CORESIGHT=y
