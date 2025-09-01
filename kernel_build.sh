@@ -21,7 +21,7 @@ export KBUILD_BUILD_USER=Bhazheng
 export KBUILD_BUILD_HOST=cachyos
 export ARCH=arm64
 export SUBARCH=ARM64
-export CLANG_PATH="$HOME/Toolchain/neutron-clang/bin" # Gunakan path absolut untuk CLANG_PATH
+export CLANG_PATH="$HOME/r547379/bin" # Gunakan path absolut untuk CLANG_PATH
 export PATH="$CLANG_PATH:$PATH"
 # export DTC_EXT="$LOCAL_SAVE_DIR/Toolchain/dtc_kernel/linux-x86/dtc/dtc" # Gunakan path absolut
 
@@ -37,8 +37,8 @@ mkdir -p out &>> "$LOG_FILE"
 # Konfigurasi variabel lingkungan
 # export CROSS_COMPILE="~/aarch64-linux-android-4.9/bin/aarch64-linux-android-" # Gunakan tanda kutip untuk string
 # export CROSS_COMPILE_ARM32="~/arm-linux-androideabi-4.9/bin/arm-linux-androideabi-" # Gunakan tanda kutip untuk string
-# export CROSS_COMPILE=aarch64-linux-gnu- 
-# export CROSS_COMPILE_ARM32=arm-linux-gnueabi- 
+# export CROSS_COMPILE=aarch64-linux-gnu-
+# export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
 # export CLANG_TRIPLE="~/aarch64-linux-android-4.9/bin/aarch64-linux-gnu-" # Gunakan tanda kutip untuk string
 # export CLANG_TRIPLE="~/aarch64-linux-android-4.9/bin/aarch64-linux-gnu-" # Gunakan tanda kutip untuk string
 
